@@ -63,24 +63,26 @@ END_COLOR    = '\033[0m'
 if not ( len(sys.argv) == 3 and
     os.path.isdir(sys.argv[1]) and
     os.path.isdir(sys.argv[2])):
+    usage(1)
     local_root="/mnt/system-patch/"
     ext_root="/mnt/system-122/"
 else:
-    local_root = sys.argv[1]
-    ext_root = sys.argv[2]
-#    usage(1)
+    local_root = sys.argv[1] if sys.argv[1].endswith('/') else sys.argv[1] + '/'
+    ext_root = sys.argv[2] if sys.argv[2].endswith('/') else sys.argv[2] + '/'
 
 
 try:
-    with open('diff') as missings_file:
+    with open('allowed-missing-files') as missings_file:
         missings_list = missings_file.read().splitlines()
+#        print missings_list
 except IOError:
         print WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
         missings_list = []
+
 ext_shared_objects  = linux_like_find (ext_root, "*.so")
 
 for so_wholename in ext_shared_objects:
-    basename = re.sub(ext_root, '', so_wholename) 
+    basename = re.sub(ext_root , '/', so_wholename) 
     if not file_ok(basename, local_root, missings_list):
         print basename + FAIL_COLOR + " must be there!" + END_COLOR
 
