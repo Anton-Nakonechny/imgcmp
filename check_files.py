@@ -47,6 +47,30 @@ def file_in_list (rel_path, local_list):
             return True
     return False
 
+def readelfCmd(path):
+    """ Generate command list from file path """
+    #sections = ['.dynsym', '.dynstr', '.hash', '.rel.dyn', '.rel.plt', '.plt', '.text', '.ARM.exidx', '.ARM.extab', '.rodata', '.data.rel.ro.local', '.init_array', '.data.rel.ro', '.fini_array', '.dynamic', '.got', '.data', '.bss', '.comment', '.note.gnu.gold-version', '.ARM.attributes',  '.gnu_debuglink', '.shstrtab']
+    #sections = ['.text', '.gnu_debuglink']
+    sections = ['.text','.dynsym']
+
+    command = [('-x' + i) for i in sections] # add -x to each section for hex-dump
+    command.insert(0, 'readelf')             # add 'readelf' command
+    command.append(path)
+
+    return command
+
+def md5Cmd(cmd):
+    """ Execute cmd and return MD5 of it's output """
+    # pipe1: command execution
+    pipe1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+
+    # pipe2: md5sum of command output
+    pipe2 = subprocess.Popen('md5sum', stdin=pipe1.stdout, stdout=subprocess.PIPE)
+    pipe1.stdout.close() # Allow pipe1 to receive a SIGPIPE if pipe2 exits.
+
+    output = pipe2.communicate()[0]
+    return (output[:-4]) # cut out last four symbols: (  -\n) from output
+
 
 def file_ok (rel_path, local_mountpoint, allowed_missings_list):
     if os.path.isfile(local_mountpoint + rel_path):
