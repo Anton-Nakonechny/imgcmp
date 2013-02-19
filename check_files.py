@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #/usr/bin/python3.2
 
-import os, glob, sys, re, argparse
+import os, glob, sys ,re, datetime, subprocess, argparse
 
 def DFS(root, skip_symlinks = 1):
     """Depth first search traversal of directory structure."""
@@ -14,6 +14,9 @@ def DFS(root, skip_symlinks = 1):
             visited[d] = 1
             yield d
         stack.extend(subdirs(d, skip_symlinks))
+
+def realpath(fname):
+    return str(os.popen("realpath " + fname).read()).rstrip()
 
 def subdirs(root, skip_symlinks = 1):
     """Given a root directory, returns the first-level subdirectories."""
@@ -67,20 +70,48 @@ def md5Cmd(cmd):
     return (output[:-4]) # cut out last four symbols: (  -\n) from output
 
 
-def file_ok (rel_path, local_mountpoint, allowed_missings_list):
+def file_ok(rel_path, local_mountpoint, allowed_missings_list):
     if os.path.isfile(local_mountpoint + rel_path):
+#        print local_mountpoint + rel_path
         return True
     return rel_path in allowed_missings_list
 
+def mount_loop(AbsImgPath, MountPoint):
+    return subprocess.check_call(['sudo','mount', '-o', 'loop', AbsImgPath, MountPoint], shell=False)
+
+def umount_loop(MountPoint):
+    return subprocess.check_call(['sudo','umount', MountPoint], shell=False)
+
+def prepare(rootDirPath, localImg, extImg):
+    if not rootDirPath.endswith('/'):
+        rootDirPath += '/'
+    badWorkDirMsg = "Bad workdir"
+    workDirPath = rootDirPath + nowString + '/'
+    try:
+        if not (os.path.isdir(rootDirPath) and os.access(rootDirPath, os.W_OK)):
+            print badWorkDirMsg
+            return ()
+        os.mkdir(workDirPath)
+        localMountpointPath = workDirPath + 'local_root/'
+        extMountpointPath = workDirPath + 'ext_root/'
+        os.mkdir(localMountpointPath)
+        os.mkdir(extMountpointPath)
+        mount_loop(localImg, localMountpointPath)
+        mount_loop(extImg, extMountpointPath)
+        return (localMountpointPath, extMountpointPath)
+    except OSError:
+        print badWorkDirMsg
+        return ()
+
 parser = argparse.ArgumentParser()
-parser.add_argument("local_root", help="path to local")
-parser.add_argument("ext_root", help="path to ext")
+parser.add_argument("local_img", help="path to local")
+parser.add_argument("ext_img", help="path to ext")
 #parser.add_argument("--tmp-dir", type=str, help="path to tmp-dir", required=True)
 args = parser.parse_args()
-local_root = args.local_root
-ext_root = args.ext_root
-print 'local_img = ' + args.local_root
-print 'ext_img = ' + args.ext_root
+local_img = args.local_img
+ext_img = args.ext_img
+print 'local_img = ' + args.local_img
+print 'ext_img = ' + args.ext_img
 #print 'tmp_dir = ' args.tmp_dir
 
 WARNING_COLOR = '\033[93m'
@@ -89,17 +120,22 @@ END_COLOR    = '\033[0m'
 
 #local_shared_objects = linux_like_find (local_root, "*.so")
 
-if not ( len(sys.argv) == 3 and
-    os.path.isdir(local_root) and
-    os.path.isdir(ext_root)):
-    parser.print_help()
-    sys.exit(1)
-#    local_root="/mnt/system-patch/"
-#    ext_root="/mnt/system-122/"
-else:
-    local_root = args.local_root if local_root.endswith('/') else local_root + '/'
-    ext_root = args.ext_root if ext_root.endswith('/') else ext_root + '/'
+nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
 
+
+if not (os.path.isfile(local_img) and
+    os.path.isfile(ext_img)):
+    parser.print_help()
+    print local_img 
+    print ext_img
+    sys.exit(1)
+#    localImgRealpath = '/home/x0169011/afs/main-moto-jb/out/target/product/cdma_spyder-p1c_spyder/system.img'
+#    extImgRealPath = '/home/x0169011/daily/p1c_spyder-cdma_spyder_mmi-userdebug-4.1.2-9.8.2O_122-2074-test-keys-Verizon-US/system.img'
+
+rootDirPath = '/tmp/'
+dirs = prepare(rootDirPath, realpath(local_img), realpath(ext_img))
+local_root=dirs[0]
+ext_root=dirs[1]
 
 try:
     with open('allowed-missing-files') as missings_file:
@@ -116,3 +152,5 @@ for so_wholename in ext_shared_objects:
     if not file_ok(basename, local_root, missings_list):
         print basename + FAIL_COLOR + " must be there!" + END_COLOR
 
+umount_loop(dirs[0])
+umount_loop(dirs[1])
