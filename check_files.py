@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #/usr/bin/python3.2
 
-import os, glob, sys ,re, datetime, subprocess, argparse
+import os, glob, sys ,re, datetime, subprocess, argparse, hashlib
 
 def DFS(root, skip_symlinks = 1):
     """Depth first search traversal of directory structure."""
@@ -61,17 +61,37 @@ def readelfCmd(path):
 
     return command
 
-def md5Cmd(cmd):
-    """ Execute cmd and return MD5 of it's output """
-    # pipe1: command execution
-    pipe1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+def md5_hashlib_v1(cmd):
+    """ Execute cmd and return MD5 of it's output using hashlib.md5 for stdout.read() """
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    ret = hashlib.md5(p.stdout.read()).hexdigest()
+    perr = p.stderr.read()
+    if (perr != ''):
+        print WARNING_COLOR + 'md5_hashlib_v1:\n\tcommand: ' + ' '.join(cmd) + '\n\terr: ' + perr[:-1] + END_COLOR
+    #print 'md5_hashlib_v1: md5: ' + ret
+    return ret
 
-    # pipe2: md5sum of command output
-    pipe2 = subprocess.Popen('md5sum', stdin=pipe1.stdout, stdout=subprocess.PIPE)
-    pipe1.stdout.close() # Allow pipe1 to receive a SIGPIPE if pipe2 exits.
+def md5_hashlib_v2(cmd):
+    """ Execute cmd and return MD5 of it's output using hashlib.md5 for communicate() result """
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    pout, perr = p.communicate()
+    ret = hashlib.md5(pout).hexdigest()
+    if (perr != ''):
+        print WARNING_COLOR + 'md5_hashlib_v2:\n\tcommand: ' + ' '.join(cmd) + '\n\terr: ' + perr[:-1] + END_COLOR
+    #print 'md5_hashlib_v2: md5: ' + ret
+    return ret
 
-    output = pipe2.communicate()[0]
-    return (output[:-4]) # cut out last four symbols: (  -\n) from output
+def md5_md5sum(cmd):
+    """ Execute cmd and return MD5 of it's output using md5sum utility """
+    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p2 = subprocess.Popen('md5sum', stdin=p1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p1err = p1.stderr.read()
+    p1.stdout.close() # Allow p1 to receive a SIGPIPE if p2 exits.
+    p2out, p2err = p2.communicate()
+    if (p1err != '' or p2err != ''):
+        print WARNING_COLOR + 'md5_md5sum:\n\tcommand: ' + ' '.join(cmd) +'\n\terr_p1: ' + p1err[:-1] + '\terr_p2: ' + p2err + END_COLOR
+    #print 'md5_md5sum: md5:     ' + p2out[:-4]
+    return p2out[:-4]
 
 """dummy compare md5 function returning true allways"""
 def compare_shared_object(dummy1, dummy2):
