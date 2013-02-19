@@ -1,12 +1,7 @@
 #!/usr/bin/python
 #/usr/bin/python3.2
 
-import os, glob, sys ,re
-
-def usage(retcode):
-    print "Usage: " + os.path.basename(sys.argv[0]) + " <local_build_mountpoint> <external_build_mountpoint>."
-    print "  Display android system.img conformity info"
-    sys.exit(retcode)
+import os, glob, sys, re, argparse
 
 def DFS(root, skip_symlinks = 1):
     """Depth first search traversal of directory structure."""
@@ -77,6 +72,16 @@ def file_ok (rel_path, local_mountpoint, allowed_missings_list):
         return True
     return rel_path in allowed_missings_list
 
+parser = argparse.ArgumentParser()
+parser.add_argument("local_root", help="path to local")
+parser.add_argument("ext_root", help="path to ext")
+#parser.add_argument("--tmp-dir", type=str, help="path to tmp-dir", required=True)
+args = parser.parse_args()
+local_root = args.local_root
+ext_root = args.ext_root
+print 'local_img = ' + args.local_root
+print 'ext_img = ' + args.ext_root
+#print 'tmp_dir = ' args.tmp_dir
 
 WARNING_COLOR = '\033[93m'
 FAIL_COLOR = '\033[91m'
@@ -85,14 +90,15 @@ END_COLOR    = '\033[0m'
 #local_shared_objects = linux_like_find (local_root, "*.so")
 
 if not ( len(sys.argv) == 3 and
-    os.path.isdir(sys.argv[1]) and
-    os.path.isdir(sys.argv[2])):
-    usage(1)
-    local_root="/mnt/system-patch/"
-    ext_root="/mnt/system-122/"
+    os.path.isdir(local_root) and
+    os.path.isdir(ext_root)):
+    parser.print_help()
+    sys.exit(1)
+#    local_root="/mnt/system-patch/"
+#    ext_root="/mnt/system-122/"
 else:
-    local_root = sys.argv[1] if sys.argv[1].endswith('/') else sys.argv[1] + '/'
-    ext_root = sys.argv[2] if sys.argv[2].endswith('/') else sys.argv[2] + '/'
+    local_root = args.local_root if local_root.endswith('/') else local_root + '/'
+    ext_root = args.ext_root if ext_root.endswith('/') else ext_root + '/'
 
 
 try:
