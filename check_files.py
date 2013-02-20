@@ -73,12 +73,22 @@ def md5Cmd(cmd):
     output = pipe2.communicate()[0]
     return (output[:-4]) # cut out last four symbols: (  -\n) from output
 
+"""dummy compare md5 function returning true allways"""
+def compare_shared_object(dummy1, dummy2):
+    return True
 
-def file_ok(rel_path, local_mountpoint, allowed_missings_list):
-    if os.path.isfile(local_mountpoint + rel_path):
-#        print local_mountpoint + rel_path
-        return True
-    return rel_path in allowed_missings_list
+"""Check files existance at both mountpoints and than call to compare function"""
+def file_ok(rel_path, local_mountpoint, ext_mountpoint, check_function, allowed_missings_list):
+    local_filepath = re.sub('//', '/',local_mountpoint + rel_path)
+    ext_filepath = re.sub('//', '/',ext_mountpoint + rel_path)
+    if not os.path.isfile(local_filepath):
+        return rel_path in allowed_missings_list
+    if not os.path.isfile(ext_filepath):
+        return False
+#    print local_filepath
+
+    return check_function(local_filepath, ext_filepath)
+
 
 def mount_loop(AbsImgPath, MountPoint):
     return subprocess.check_call(['sudo','mount', '-o', 'loop', AbsImgPath, MountPoint], shell=False)
@@ -126,6 +136,7 @@ END_COLOR    = '\033[0m'
 
 nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
 
+cmpMetodDict = { "*.so":compare_shared_object }
 
 if not (os.path.isfile(local_img) and
     os.path.isfile(ext_img)):
@@ -149,12 +160,13 @@ except IOError:
         print WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
         missings_list = []
 
-ext_shared_objects  = linux_like_find (ext_root, "*.so")
+for extension_pattern in cmpMetodDict.keys():
+    ext_files_list = linux_like_find (ext_root, extension_pattern)
 
-for so_wholename in ext_shared_objects:
-    basename = re.sub(ext_root , '/', so_wholename) 
-    if not file_ok(basename, local_root, missings_list):
-        print basename + FAIL_COLOR + " must be there!" + END_COLOR
+    for file_wholename in ext_files_list:
+        basename = re.sub(ext_root , '/', file_wholename) 
+        if not file_ok(basename, local_root, ext_root, compare_shared_object, missings_list):
+            print basename + FAIL_COLOR + " doesn't match!" + END_COLOR
 
 umount_loop(dirs[0])
 umount_loop(dirs[1])
