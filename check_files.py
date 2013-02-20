@@ -16,7 +16,11 @@ def DFS(root, skip_symlinks = 1):
         stack.extend(subdirs(d, skip_symlinks))
 
 def realpath(fname):
-    return str(os.popen("realpath " + fname).read()).rstrip()
+    result = str(os.popen("realpath " + fname).read()).rstrip()
+    if result:
+        return result
+    else:
+        return os.path.abspath(fname)
 
 def subdirs(root, skip_symlinks = 1):
     """Given a root directory, returns the first-level subdirectories."""
