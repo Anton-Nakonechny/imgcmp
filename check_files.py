@@ -100,6 +100,7 @@ def prepare(rootDirPath, localImg, extImg):
     if not rootDirPath.endswith('/'):
         rootDirPath += '/'
     badWorkDirMsg = "Bad workdir"
+    nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
     workDirPath = rootDirPath + nowString + '/'
     try:
         if not (os.path.isdir(rootDirPath) and os.access(rootDirPath, os.W_OK)):
@@ -117,56 +118,58 @@ def prepare(rootDirPath, localImg, extImg):
         print badWorkDirMsg
         return ()
 
-parser = argparse.ArgumentParser()
-parser.add_argument("local_img", help="path to local")
-parser.add_argument("ext_img", help="path to ext")
-#parser.add_argument("--tmp-dir", type=str, help="path to tmp-dir", required=True)
-args = parser.parse_args()
-local_img = args.local_img
-ext_img = args.ext_img
-print 'local_img = ' + args.local_img
-print 'ext_img = ' + args.ext_img
-#print 'tmp_dir = ' args.tmp_dir
-
 WARNING_COLOR = '\033[93m'
 FAIL_COLOR = '\033[91m'
 END_COLOR    = '\033[0m' 
 
-#local_shared_objects = linux_like_find (local_root, "*.so")
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("local_img", help="path to local")
+    parser.add_argument("ext_img", help="path to ext")
+    #parser.add_argument("--tmp-dir", type=str, help="path to tmp-dir", required=True)
+    args = parser.parse_args()
+    local_img = args.local_img
+    ext_img = args.ext_img
+    print 'local_img = ' + args.local_img
+    print 'ext_img = ' + args.ext_img
+    #print 'tmp_dir = ' args.tmp_dir
 
-nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
+    #local_shared_objects = linux_like_find (local_root, "*.so")
 
-cmpMetodDict = { "*.so":compare_shared_object }
+    cmpMetodDict = { "*.so":compare_shared_object }
 
-if not (os.path.isfile(local_img) and
-    os.path.isfile(ext_img)):
-    parser.print_help()
-    print local_img 
-    print ext_img
-    sys.exit(1)
-#    localImgRealpath = '/home/x0169011/afs/main-moto-jb/out/target/product/cdma_spyder-p1c_spyder/system.img'
-#    extImgRealPath = '/home/x0169011/daily/p1c_spyder-cdma_spyder_mmi-userdebug-4.1.2-9.8.2O_122-2074-test-keys-Verizon-US/system.img'
+    if not (os.path.isfile(local_img) and
+        os.path.isfile(ext_img)):
+        parser.print_help()
+        print local_img
+        print ext_img
+        sys.exit(1)
+    #    localImgRealpath = '/home/x0169011/afs/main-moto-jb/out/target/product/cdma_spyder-p1c_spyder/system.img'
+    #    extImgRealPath = '/home/x0169011/daily/p1c_spyder-cdma_spyder_mmi-userdebug-4.1.2-9.8.2O_122-2074-test-keys-Verizon-US/system.img'
 
-rootDirPath = '/tmp/'
-dirs = prepare(rootDirPath, realpath(local_img), realpath(ext_img))
-local_root=dirs[0]
-ext_root=dirs[1]
+    rootDirPath = '/tmp/'
+    dirs = prepare(rootDirPath, realpath(local_img), realpath(ext_img))
+    local_root=dirs[0]
+    ext_root=dirs[1]
 
-try:
-    with open('allowed-missing-files') as missings_file:
-        missings_list = missings_file.read().splitlines()
-#        print missings_list
-except IOError:
-        print WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
-        missings_list = []
+    try:
+        with open('allowed-missing-files') as missings_file:
+            missings_list = missings_file.read().splitlines()
+    #        print missings_list
+    except IOError:
+            print WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
+            missings_list = []
 
-for extension_pattern in cmpMetodDict.keys():
-    ext_files_list = linux_like_find (ext_root, extension_pattern)
+    for extension_pattern in cmpMetodDict.keys():
+        ext_files_list = linux_like_find (ext_root, extension_pattern)
 
-    for file_wholename in ext_files_list:
-        basename = re.sub(ext_root , '/', file_wholename) 
-        if not file_ok(basename, local_root, ext_root, compare_shared_object, missings_list):
-            print basename + FAIL_COLOR + " doesn't match!" + END_COLOR
+        for file_wholename in ext_files_list:
+            basename = re.sub(ext_root , '/', file_wholename)
+            if not file_ok(basename, local_root, ext_root, compare_shared_object, missings_list):
+                print basename + FAIL_COLOR + " doesn't match!" + END_COLOR
 
-umount_loop(dirs[0])
-umount_loop(dirs[1])
+    umount_loop(dirs[0])
+    umount_loop(dirs[1])
+
+if __name__ == '__main__':
+    main()
