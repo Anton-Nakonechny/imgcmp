@@ -51,9 +51,8 @@ def file_in_list (rel_path, local_list):
 
 def readelfCmd(path):
     """ Generate command list from file path """
-    #sections = ['.dynsym', '.dynstr', '.hash', '.rel.dyn', '.rel.plt', '.plt', '.text', '.ARM.exidx', '.ARM.extab', '.rodata', '.data.rel.ro.local', '.init_array', '.data.rel.ro', '.fini_array', '.dynamic', '.got', '.data', '.bss', '.comment', '.note.gnu.gold-version', '.ARM.attributes',  '.gnu_debuglink', '.shstrtab']
-    #sections = ['.text', '.gnu_debuglink']
-    sections = ['.text','.dynsym']
+    #sections = ['.nonexisting']
+    sections = ['.text']
 
     command = [('-x' + i) for i in sections] # add -x to each section for hex-dump
     command.insert(0, 'readelf')             # add 'readelf' command
@@ -67,7 +66,7 @@ def md5_hashlib_v1(cmd):
     ret = hashlib.md5(p.stdout.read()).hexdigest()
     perr = p.stderr.read()
     if (perr != ''):
-        print WARNING_COLOR + 'md5_hashlib_v1:\n\tcommand: ' + ' '.join(cmd) + '\n\terr: ' + perr[:-1] + END_COLOR
+        print WARNING_COLOR + 'md5_hashlib_v1: command: \"' + ' '.join(cmd) + '\" returned stderr: \"' + perr[:-1] + '\"' + END_COLOR
     #print 'md5_hashlib_v1: md5: ' + ret
     return ret
 
@@ -76,32 +75,47 @@ def md5_hashlib_v2(cmd):
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     pout, perr = p.communicate()
     ret = hashlib.md5(pout).hexdigest()
+    if (pout == ''):
+        print WARNING_COLOR + 'md5_md5sum: command \"' + ' '.join(cmd) + '\" returned empty stdout' + END_COLOR
     if (perr != ''):
-        print WARNING_COLOR + 'md5_hashlib_v2:\n\tcommand: ' + ' '.join(cmd) + '\n\terr: ' + perr[:-1] + END_COLOR
+        print WARNING_COLOR + 'md5_md5sum: command \"' + ' '.join(cmd) + '\" returned strerr: \"' + perr[:-1] + '\"' + END_COLOR
     #print 'md5_hashlib_v2: md5: ' + ret
     return ret
 
 def md5_md5sum(cmd):
     """ Execute cmd and return MD5 of it's output using md5sum utility """
     p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    p2 = subprocess.Popen('md5sum', stdin=p1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p2 = subprocess.Popen('md5sum', stdin=p1.stdout, stdout=subprocess.PIPE)
     p1err = p1.stderr.read()
     p1.stdout.close() # Allow p1 to receive a SIGPIPE if p2 exits.
-    p2out, p2err = p2.communicate()
-    if (p1err != '' or p2err != ''):
-        print WARNING_COLOR + 'md5_md5sum:\n\tcommand: ' + ' '.join(cmd) +'\n\terr_p1: ' + p1err[:-1] + '\terr_p2: ' + p2err + END_COLOR
+    p2out = p2.communicate()[0]
+    if (p1err != ''):
+        print WARNING_COLOR + 'md5_md5sum: command \"' + ' '.join(cmd) + '\" returned strerr: \"' + p1err[:-1] + '\"' + END_COLOR
     #print 'md5_md5sum: md5:     ' + p2out[:-4]
     return p2out[:-4]
 
-"""dummy compare md5 function returning true allways"""
-def compare_shared_object(dummy1, dummy2):
-    return True
+def compare_shared_object(file1, file2):
+    """ Compare md5 for shared object files """
+    # Choose here what algo for md5 sum calculation to use
+    # On Volodymyr Frolov's opinion md5_hashlib_v2 is the best choice
+    sum1 = md5_hashlib_v2(readelfCmd(file1))
+    sum2 = md5_hashlib_v2(readelfCmd(file2))
+    if (sum1 == sum2):
+        #print 'MD5 OK: ' + sum1
+        return True
+    else:
+        #print FAIL_COLOR + file1 + ' ' + sum1 + '\n' + file2 + ' ' + sum2 + END_COLOR
+        return False
 
 """Check files existance at both mountpoints and than call to compare function"""
 def file_ok(rel_path, local_mountpoint, ext_mountpoint, check_function, allowed_missings_list):
     local_filepath = re.sub('//', '/',local_mountpoint + rel_path)
     ext_filepath = re.sub('//', '/',ext_mountpoint + rel_path)
     if not os.path.isfile(local_filepath):
+        # temp: Warn about missing files separately from error about different ones
+        if not rel_path in allowed_missings_list:
+            print rel_path + FAIL_COLOR + " MISSING!!!" + END_COLOR
+        # temp: end
         return rel_path in allowed_missings_list
     if not os.path.isfile(ext_filepath):
         return False
