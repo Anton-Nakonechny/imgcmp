@@ -16,7 +16,7 @@ def DFS(root, skip_symlinks = 1):
         stack.extend(subdirs(d, skip_symlinks))
 
 def realpath(fname):
-#if realpath utiliry is available, use it, instead of abspath
+#if realpath utility is available, use it, instead of abspath
     result = os.path.abspath(fname)
     try:
         result = subprocess.check_output(['realpath', fname]).rstrip()
@@ -62,123 +62,152 @@ def readelfCmd(path):
 
     return command
 
-def md5_hashlib_v1(cmd):
-    """ Execute cmd and return MD5 of it's output using hashlib.md5 for stdout.read() """
-    global p
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    ret = hashlib.md5(p.stdout.read()).hexdigest()
-    perr = p.stderr.read()
-    if (perr != ''):
-        print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" stderr: \"' + perr[:-1] + '\"' + END_COLOR
-    #print 'md5_hashlib_v1: md5: ' + ret
-    return ret
-
-def md5_hashlib_v2(cmd):
-    """ Execute cmd and return MD5 of it's output using hashlib.md5 for communicate() result """
-    global p
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    pout, perr = p.communicate()
-    ret = hashlib.md5(pout).hexdigest()
-    if (pout == ''):
-        print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" empty stdout' + END_COLOR
-    if (perr != ''):
-        print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
-    #print 'md5_hashlib_v2: md5: ' + ret
-    return ret
-
-def md5_md5sum(cmd):
-    """ Execute cmd and return MD5 of it's output using md5sum utility """
-    global p
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    p2 = subprocess.Popen('md5sum', stdin=p.stdout, stdout=subprocess.PIPE)
-    perr = p.stderr.read()
-    p.stdout.close() # Allow p to receive a SIGPIPE if p2 exits.
-    p2out = p2.communicate()[0]
-    if (perr != ''):
-        print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
-    #print 'md5_md5sum: md5:     ' + p2out[:-4]
-    return p2out[:-4]
-
-def compare_shared_object(file1, file2):
-    """ Compare md5 for shared object files """
-    # Choose here what algo for md5 sum calculation to use
-    # On Volodymyr Frolov's opinion md5_hashlib_v2 is the best choice
-    sum1 = md5_hashlib_v2(readelfCmd(file1))
-    sum2 = md5_hashlib_v2(readelfCmd(file2))
-    if (sum1 == sum2):
-        #print 'MD5 OK: ' + sum1
-        return True
-    else:
-        #print FAIL_COLOR + file1 + ' ' + sum1 + '\n' + file2 + ' ' + sum2 + END_COLOR
-        return False
+#def md5_hashlib_v1(cmd):
+#    """ Execute cmd and return MD5 of it's output using hashlib.md5 for stdout.read() """
+#    global p
+#    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#    ret = hashlib.md5(p.stdout.read()).hexdigest()
+#    perr = p.stderr.read()
+#    if (perr != ''):
+#        print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" stderr: \"' + perr[:-1] + '\"' + END_COLOR
+#    #print 'md5_hashlib_v1: md5: ' + ret
+#    return ret
+#
+#def md5_md5sum(cmd):
+#    """ Execute cmd and return MD5 of it's output using md5sum utility """
+#    global p
+#    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#    p2 = subprocess.Popen('md5sum', stdin=p.stdout, stdout=subprocess.PIPE)
+#    perr = p.stderr.read()
+#    p.stdout.close() # Allow p to receive a SIGPIPE if p2 exits.
+#    p2out = p2.communicate()[0]
+#    if (perr != ''):
+#        print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
+#    #print 'md5_md5sum: md5:     ' + p2out[:-4]
+#    return p2out[:-4]
+#
 
 """Check files existance at both mountpoints and than call to compare function"""
-def file_ok(rel_path, local_mountpoint, ext_mountpoint, check_function, allowed_missings_list):
-    local_filepath = re.sub('//', '/',local_mountpoint + rel_path)
-    ext_filepath = re.sub('//', '/',ext_mountpoint + rel_path)
-    if not os.path.isfile(local_filepath):
-        # temp: Warn about missing files separately from error about different ones
-        if not rel_path in allowed_missings_list:
-            print rel_path + FAIL_COLOR + " MISSING!!!" + END_COLOR
-        # temp: end
-        return rel_path in allowed_missings_list
-    if not os.path.isfile(ext_filepath):
-        return False
-#    print local_filepath
-
-    return check_function(local_filepath, ext_filepath)
 
 def mount_loop(AbsImgPath, MountPoint):
     return subprocess.check_call(['sudo','mount', '-o', 'loop', AbsImgPath, MountPoint], shell=False)
 
-def umount_loop(MountPoint):
-    global p
-    if ( p.poll() is None):
-        p.terminate()
-    try:
-        subprocess.check_call(['sudo','umount', MountPoint])
-    except subprocess.CalledProcessError, e:
-        print 'umount exited with code:', e.returncode, 'see lsof output:'
-        subprocess.call(['lsof', MountPoint])
-
-def prepare(rootDirPath, localImg, extImg):
-    if not rootDirPath.endswith('/'):
-        rootDirPath += '/'
-    badWorkDirMsg = "Bad workdir"
-    nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
-    workDirPath = rootDirPath + nowString + '/'
-    try:
-        if not (os.path.isdir(rootDirPath) and os.access(rootDirPath, os.W_OK)):
-            print badWorkDirMsg
-            return ()
-        os.mkdir(workDirPath)
-        global localMountpointPath
-        global extMountpointPath
-        localMountpointPath = workDirPath + 'local_root/'
-        extMountpointPath = workDirPath + 'ext_root/'
-        os.mkdir(localMountpointPath)
-        os.mkdir(extMountpointPath)
-        mount_loop(localImg, localMountpointPath)
-        mount_loop(extImg, extMountpointPath)
-        return (localMountpointPath, extMountpointPath)
-    except OSError:
-        print badWorkDirMsg
-        return ()
-
-def cleanup():
-    umount_loop(localMountpointPath)
-    umount_loop(extMountpointPath)
-
 def signal_handler(signum, frame):
-    cleanup()
+    global tester
+    try:
+        if tester:
+            del tester
+#Print termination message instead off falling to NameError exception for non-existing object in corner case of early script termination.
+    except NameError:
+        pass
     exitstr = 'Exiting on signal: ' + str(signum)
     sys.exit(exitstr)
 
 WARNING_COLOR = '\033[93m'
 FAIL_COLOR = '\033[91m'
+OK_COLOR = '\033[92m'
 END_COLOR    = '\033[0m'
 
+class AFSImageComparator:
+    
+    def file_ok(self, rel_path, local_mountpoint, ext_mountpoint, check_function, allowed_missings_list):
+        local_filepath = re.sub('//', '/',local_mountpoint + rel_path)
+        ext_filepath = re.sub('//', '/',ext_mountpoint + rel_path)
+        if not os.path.isfile(local_filepath):
+                # temp: Warn about missing files separately from error about different ones
+            if not rel_path in allowed_missings_list:
+                print rel_path + FAIL_COLOR + " MISSING!!!" + END_COLOR
+            # temp: end
+            return rel_path in allowed_missings_list
+        if not os.path.isfile(ext_filepath):
+            return False
+#    print local_filepath
+
+        return check_function(self, local_filepath, ext_filepath)
+    def md5_hashlib_v2(self, cmd):
+        """ Execute cmd and return MD5 of it's output using hashlib.md5 for communicate() result """
+        self.gReadelfProc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        pout, perr = self.gReadelfProc.communicate()
+        ret = hashlib.md5(pout).hexdigest()
+        if (pout == ''):
+            print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" empty stdout' + END_COLOR
+        if (perr != ''):
+            print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
+        #print 'md5_hashlib_v2: md5: ' + ret
+        return ret
+
+    def umount_loop(self, MountPoint):
+        try:
+            if self.gReadelfProc:
+                if (self.gReadelfProc.poll() is None):
+                    self.gReadelfProc.terminate()
+            subprocess.check_call(['sudo','umount', MountPoint])
+        except subprocess.CalledProcessError, e:
+            print 'umount exited with code:', e.returncode, 'see lsof output:'
+            subprocess.call(['lsof', MountPoint])
+
+    def compare_shared_object(self, file1, file2):
+        """ Compare md5 for shared object files """
+        # Choose here what algo for md5 sum calculation to use
+        # On Volodymyr Frolov's opinion md5_hashlib_v2 is the best choice
+        sum1 = self.md5_hashlib_v2(readelfCmd(file1))
+        sum2 = self.md5_hashlib_v2(readelfCmd(file2))
+        if (sum1 == sum2):
+            #print 'MD5 OK: ' + sum1
+            return True
+        else:
+            #print FAIL_COLOR + file1 + ' ' + sum1 + '\n' + file2 + ' ' + sum2 + END_COLOR
+            return False
+    def __init__(self, localImg, extImg, rootDirPath = '/tmp/'):
+        self.gReadelfProc = None
+        if not rootDirPath.endswith('/'):
+            rootDirPath += '/'
+        badWorkDirMsg = "Bad workdir"
+        nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
+        self.workDirPath = rootDirPath + nowString + '/'
+        try:
+            if not (os.path.isdir(rootDirPath) and os.access(rootDirPath, os.W_OK)):
+                print badWorkDirMsg
+                return ()
+            os.mkdir(self.workDirPath)
+            self.localMountpointPath = self.workDirPath + 'local_root/'
+            self.extMountpointPath = self.workDirPath + 'ext_root/'
+            os.mkdir(self.localMountpointPath)
+            os.mkdir(self.extMountpointPath)
+            mount_loop(localImg, self.localMountpointPath)
+            mount_loop(extImg, self.extMountpointPath)
+            return
+        except OSError:
+            print badWorkDirMsg
+            return
+
+    cmpMetodDict = { "*.so":compare_shared_object }
+    
+    def __del__(self):
+        self.umount_loop(self.localMountpointPath)
+        self.umount_loop(self.extMountpointPath)
+
+    def run(self):
+        areImagesSame=True
+        try:
+            with open('allowed-missing-files') as missings_file:
+                missings_list = missings_file.read().splitlines()
+        #        print missings_list
+        except IOError:
+                print WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
+                missings_list = []
+
+        for extension_pattern in self.cmpMetodDict.keys():
+            ext_files_list = linux_like_find (self.extMountpointPath, extension_pattern)
+
+            for file_wholename in ext_files_list:
+                basename = re.sub(self.extMountpointPath, '/', file_wholename)
+                if not self.file_ok(basename, self.localMountpointPath, self.extMountpointPath, self.cmpMetodDict[extension_pattern] , missings_list):
+                    print basename + FAIL_COLOR + " doesn't match!" + END_COLOR
+                    areImagesSame = False
+        return areImagesSame
 def main():
+    global tester
     signal.signal(signal.SIGINT,  signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     parser = argparse.ArgumentParser()
@@ -192,42 +221,23 @@ def main():
     print 'ext_img = ' + args.ext_img
     #print 'tmp_dir = ' args.tmp_dir
 
-    #local_shared_objects = linux_like_find (local_root, "*.so")
-
-    cmpMetodDict = { "*.so":compare_shared_object }
-
     if not (os.path.isfile(local_img) and
         os.path.isfile(ext_img)):
         parser.print_help()
         print local_img
         print ext_img
         sys.exit(1)
-    #    localImgRealpath = '/home/x0169011/afs/main-moto-jb/out/target/product/cdma_spyder-p1c_spyder/system.img'
-    #    extImgRealPath = '/home/x0169011/daily/p1c_spyder-cdma_spyder_mmi-userdebug-4.1.2-9.8.2O_122-2074-test-keys-Verizon-US/system.img'
 
-    rootDirPath = '/tmp/'
-    dirs = prepare(rootDirPath, realpath(local_img), realpath(ext_img))
-    local_root=dirs[0]
-    ext_root=dirs[1]
+    tester = AFSImageComparator(realpath(local_img), realpath(ext_img))
+    OK = tester.run()
+    del tester
+    if OK:
+        print OK_COLOR + "Images are same" + END_COLOR
+        result = 0
+    else:
+        result = 255
+    sys.exit(result)
 
-    try:
-        with open('allowed-missing-files') as missings_file:
-            missings_list = missings_file.read().splitlines()
-    #        print missings_list
-    except IOError:
-            print WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
-            missings_list = []
-
-    for extension_pattern in cmpMetodDict.keys():
-        ext_files_list = linux_like_find (ext_root, extension_pattern)
-
-        for file_wholename in ext_files_list:
-            basename = re.sub(ext_root , '/', file_wholename)
-            if not file_ok(basename, local_root, ext_root, compare_shared_object, missings_list):
-                print basename + FAIL_COLOR + " doesn't match!" + END_COLOR
-
-    umount_loop(dirs[0])
-    umount_loop(dirs[1])
 
 if __name__ == '__main__':
     main()
