@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #/usr/bin/python3.2
 
-import os, glob, sys ,re, datetime, subprocess, argparse, hashlib
+import os, glob, sys ,re, datetime, subprocess, argparse, hashlib, signal
 
 def DFS(root, skip_symlinks = 1):
     """Depth first search traversal of directory structure."""
@@ -19,7 +19,7 @@ def realpath(fname):
 #if realpath utiliry is available, use it, instead of abspath
     result = os.path.abspath(fname)
     try:
-        result = subprocess.check_output(['realpath', fname])
+        result = subprocess.check_output(['realpath', fname]).rstrip()
     except OSError, e:
         print 'realpath OSError:', e
     return result
@@ -64,35 +64,38 @@ def readelfCmd(path):
 
 def md5_hashlib_v1(cmd):
     """ Execute cmd and return MD5 of it's output using hashlib.md5 for stdout.read() """
+    global p
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     ret = hashlib.md5(p.stdout.read()).hexdigest()
     perr = p.stderr.read()
     if (perr != ''):
-        print WARNING_COLOR + 'md5_hashlib_v1: command: \"' + ' '.join(cmd) + '\" returned stderr: \"' + perr[:-1] + '\"' + END_COLOR
+        print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" stderr: \"' + perr[:-1] + '\"' + END_COLOR
     #print 'md5_hashlib_v1: md5: ' + ret
     return ret
 
 def md5_hashlib_v2(cmd):
     """ Execute cmd and return MD5 of it's output using hashlib.md5 for communicate() result """
+    global p
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     pout, perr = p.communicate()
     ret = hashlib.md5(pout).hexdigest()
     if (pout == ''):
-        print WARNING_COLOR + 'md5_md5sum: command \"' + ' '.join(cmd) + '\" returned empty stdout' + END_COLOR
+        print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" empty stdout' + END_COLOR
     if (perr != ''):
-        print WARNING_COLOR + 'md5_md5sum: command \"' + ' '.join(cmd) + '\" returned strerr: \"' + perr[:-1] + '\"' + END_COLOR
+        print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
     #print 'md5_hashlib_v2: md5: ' + ret
     return ret
 
 def md5_md5sum(cmd):
     """ Execute cmd and return MD5 of it's output using md5sum utility """
-    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    p2 = subprocess.Popen('md5sum', stdin=p1.stdout, stdout=subprocess.PIPE)
-    p1err = p1.stderr.read()
-    p1.stdout.close() # Allow p1 to receive a SIGPIPE if p2 exits.
+    global p
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p2 = subprocess.Popen('md5sum', stdin=p.stdout, stdout=subprocess.PIPE)
+    perr = p.stderr.read()
+    p.stdout.close() # Allow p to receive a SIGPIPE if p2 exits.
     p2out = p2.communicate()[0]
-    if (p1err != ''):
-        print WARNING_COLOR + 'md5_md5sum: command \"' + ' '.join(cmd) + '\" returned strerr: \"' + p1err[:-1] + '\"' + END_COLOR
+    if (perr != ''):
+        print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
     #print 'md5_md5sum: md5:     ' + p2out[:-4]
     return p2out[:-4]
 
@@ -125,12 +128,18 @@ def file_ok(rel_path, local_mountpoint, ext_mountpoint, check_function, allowed_
 
     return check_function(local_filepath, ext_filepath)
 
-
 def mount_loop(AbsImgPath, MountPoint):
     return subprocess.check_call(['sudo','mount', '-o', 'loop', AbsImgPath, MountPoint], shell=False)
 
 def umount_loop(MountPoint):
-    return subprocess.check_call(['sudo','umount', MountPoint], shell=False)
+    global p
+    if ( p.poll() is None):
+        p.terminate()
+    try:
+        subprocess.check_call(['sudo','umount', MountPoint])
+    except subprocess.CalledProcessError, e:
+        print 'umount exited with code:', e.returncode, 'see lsof output:'
+        subprocess.call(['lsof', MountPoint])
 
 def prepare(rootDirPath, localImg, extImg):
     if not rootDirPath.endswith('/'):
@@ -143,6 +152,8 @@ def prepare(rootDirPath, localImg, extImg):
             print badWorkDirMsg
             return ()
         os.mkdir(workDirPath)
+        global localMountpointPath
+        global extMountpointPath
         localMountpointPath = workDirPath + 'local_root/'
         extMountpointPath = workDirPath + 'ext_root/'
         os.mkdir(localMountpointPath)
@@ -154,11 +165,22 @@ def prepare(rootDirPath, localImg, extImg):
         print badWorkDirMsg
         return ()
 
+def cleanup():
+    umount_loop(localMountpointPath)
+    umount_loop(extMountpointPath)
+
+def signal_handler(signum, frame):
+    cleanup()
+    exitstr = 'Exiting on signal: ' + str(signum)
+    sys.exit(exitstr)
+
 WARNING_COLOR = '\033[93m'
 FAIL_COLOR = '\033[91m'
-END_COLOR    = '\033[0m' 
+END_COLOR    = '\033[0m'
 
 def main():
+    signal.signal(signal.SIGINT,  signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     parser = argparse.ArgumentParser()
     parser.add_argument("local_img", help="path to local")
     parser.add_argument("ext_img", help="path to ext")
