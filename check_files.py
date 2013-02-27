@@ -109,22 +109,27 @@ OK_COLOR = '\033[92m'
 END_COLOR    = '\033[0m'
 
 class AFSImageComparator:
-    
-    def file_ok(self, rel_path, local_mountpoint, ext_mountpoint, check_function, allowed_missings_list):
+
+    # file_check() result codes
+    FILE_SAME = 0
+    FILE_DIFF = 1
+    FILE_MISS = 2
+    FILE_MISS_ALLOWED = 3
+
+    def file_check(self, rel_path, local_mountpoint, ext_mountpoint, check_function, allowed_missings_list):
         local_filepath = re.sub('//', '/',local_mountpoint + rel_path)
         ext_filepath = re.sub('//', '/',ext_mountpoint + rel_path)
         if not os.path.isfile(local_filepath):
-                # temp: Warn about missing files separately from error about different ones
-            if not rel_path in allowed_missings_list:
-                print rel_path + FAIL_COLOR + " MISSING!!!" + END_COLOR
-            # temp: end
-            return rel_path in allowed_missings_list
-        if not os.path.isfile(ext_filepath):
-            return False
-#    print local_filepath
+            if (rel_path in allowed_missings_list):
+                return AFSImageComparator.FILE_MISS_ALLOWED
+            else:
+                return AFSImageComparator.FILE_MISS
+        if check_function(self, local_filepath, ext_filepath) is True:
+            return AFSImageComparator.FILE_SAME
+        else:
+            return AFSImageComparator.FILE_DIFF
 
-        return check_function(self, local_filepath, ext_filepath)
-    def md5_hashlib_v2(self, cmd):
+    def md5_hashlib(self, cmd):
         """ Execute cmd and return MD5 of it's output using hashlib.md5 for communicate() result """
         self.gReadelfProc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         pout, perr = self.gReadelfProc.communicate()
@@ -133,7 +138,7 @@ class AFSImageComparator:
             print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" empty stdout' + END_COLOR
         if (perr != ''):
             print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
-        #print 'md5_hashlib_v2: md5: ' + ret
+        #print 'md5: ' + ret
         return ret
 
     def umount_loop(self, MountPoint):
@@ -150,14 +155,15 @@ class AFSImageComparator:
         """ Compare md5 for shared object files """
         # Choose here what algo for md5 sum calculation to use
         # On Volodymyr Frolov's opinion md5_hashlib_v2 is the best choice
-        sum1 = self.md5_hashlib_v2(readelfCmd(file1))
-        sum2 = self.md5_hashlib_v2(readelfCmd(file2))
+        sum1 = self.md5_hashlib(readelfCmd(file1))
+        sum2 = self.md5_hashlib(readelfCmd(file2))
         if (sum1 == sum2):
             #print 'MD5 OK: ' + sum1
             return True
         else:
             #print FAIL_COLOR + file1 + ' ' + sum1 + '\n' + file2 + ' ' + sum2 + END_COLOR
             return False
+
     def __init__(self, localImg, extImg, rootDirPath = '/tmp/'):
         self.gReadelfProc = None
         if not rootDirPath.endswith('/'):
@@ -202,10 +208,19 @@ class AFSImageComparator:
 
             for file_wholename in ext_files_list:
                 basename = re.sub(self.extMountpointPath, '/', file_wholename)
-                if not self.file_ok(basename, self.localMountpointPath, self.extMountpointPath, self.cmpMetodDict[extension_pattern] , missings_list):
-                    print basename + FAIL_COLOR + " doesn't match!" + END_COLOR
+                checkret = self.file_check(basename, self.localMountpointPath, self.extMountpointPath, self.cmpMetodDict[extension_pattern] , missings_list)
+                if checkret is AFSImageComparator.FILE_SAME:
+                    pass
+                elif checkret is AFSImageComparator.FILE_MISS_ALLOWED:
+                    pass
+                elif checkret is AFSImageComparator.FILE_DIFF:
                     areImagesSame = False
+                    print basename + FAIL_COLOR + " doesn't match!" + END_COLOR
+                elif checkret is AFSImageComparator.FILE_MISS:
+                    areImagesSame = False
+                    print basename + FAIL_COLOR + " missing!" + END_COLOR
         return areImagesSame
+
 def main():
     global tester
     signal.signal(signal.SIGINT,  signal_handler)
