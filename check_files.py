@@ -178,8 +178,10 @@ class AFSImageComparator:
             os.mkdir(self.workDirPath)
             self.localMountpointPath = self.workDirPath + 'local_root/'
             self.extMountpointPath = self.workDirPath + 'ext_root/'
+            self.tmpDirComparison = self.workDirPath + 'jar_apk_cmp/'
             os.mkdir(self.localMountpointPath)
             os.mkdir(self.extMountpointPath)
+            #os.mkdir(self.tmpDirComparison)
             mount_loop(localImg, self.localMountpointPath)
             mount_loop(extImg, self.extMountpointPath)
             return
@@ -228,10 +230,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("local_img", help="path to local")
     parser.add_argument("ext_img", help="path to ext")
-    #parser.add_argument("--tmp-dir", type=str, help="path to tmp-dir", required=True)
+    parser.add_argument("--tmp_dir", help="path to tmp-dir", default='/tmp/')
     args = parser.parse_args()
     local_img = args.local_img
     ext_img = args.ext_img
+    tmp_root = args.tmp_dir
     print 'local_img = ' + args.local_img
     print 'ext_img = ' + args.ext_img
     #print 'tmp_dir = ' args.tmp_dir
@@ -243,7 +246,7 @@ def main():
         print ext_img
         sys.exit(1)
 
-    tester = AFSImageComparator(realpath(local_img), realpath(ext_img))
+    tester = AFSImageComparator(realpath(local_img), realpath(ext_img), tmp_root)
     OK = tester.run()
     del tester
     if OK:
