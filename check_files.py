@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #/usr/bin/python3.2
 
-import os, glob, sys ,re, datetime, subprocess, argparse, hashlib, signal
+import os, glob, sys ,re, datetime, subprocess, argparse, hashlib, signal, getpass
 
 def DFS(root, skip_symlinks = 1):
     """Depth first search traversal of directory structure."""
@@ -164,6 +164,52 @@ class AFSImageComparator:
             #print FAIL_COLOR + file1 + ' ' + sum1 + '\n' + file2 + ' ' + sum2 + END_COLOR
             return False
 
+    def del_tmp_dir(self, path):
+        if os.path.isdir(path):
+            subprocess.call(['sudo', 'chown', '-R', str(getpass.getuser()), str(path)], shell=False)
+            subprocess.call(['rm','-rf',str(path)], shell=False)
+
+    def process_apk(self, refer_ext, refer_loc, tmpDirComparison):
+        """directly parser for *.apk and *.jar files (unpack to dex)"""
+        root_dir = os.path.dirname(refer_loc)
+        apk_dir=str(re.sub('\..*^','',os.path.basename(refer_loc)))
+        self.del_tmp_dir(str(tmpDirComparison)+apk_dir)
+        os.mkdir(tmpDirComparison+apk_dir)
+        locDir = tmpDirComparison+apk_dir+'/loc'
+        extDir = tmpDirComparison+apk_dir+'/ext'
+        os.mkdir(locDir)
+        os.mkdir(extDir)
+        p1_unzip = subprocess.Popen(["sudo", "unzip", refer_loc, "-d", locDir], stdout=subprocess.PIPE)
+        p1_unzip.communicate()
+        p2_unzip = subprocess.Popen(["sudo", "unzip", refer_ext, "-d", extDir], stdout=subprocess.PIPE)
+        p2_unzip.communicate()
+        p_dex_loc = subprocess.Popen(["md5sum", str(locDir+'/classes.dex')], stdout=subprocess.PIPE)
+        out_loc = p_dex_loc.communicate()[0]
+        p_dex_ext = subprocess.Popen(["md5sum", str(extDir+'/classes.dex')], stdout=subprocess.PIPE)
+        out_ext = p_dex_ext.communicate()[0]
+        if (out_ext[:33]==out_loc[:33]):
+            #print "Sources are OK "+apk_dir
+            self.del_tmp_dir(tmpDirComparison+apk_dir)
+            return True
+        else:
+            #print tmpDirComparison+apk_dir + FAIL_COLOR + " different sources!"+ END_COLOR
+            #del_tmp_dir(tmpDirComparison+apk_dir)
+            return False
+
+    def cmp_and_process(self, ext_shared_objects,loc_shared_objects):
+        p_ext = subprocess.Popen(['md5sum',ext_shared_objects], stdout=subprocess.PIPE)
+        out_ext=p_ext.communicate()[0]
+        p_loc = subprocess.Popen(['md5sum',loc_shared_objects], stdout=subprocess.PIPE)
+        out_loc=p_loc.communicate()[0]
+        if (out_ext[:33]==out_loc[:33]):
+            #print "archives are OK"
+            return True
+        else:
+            if self.process_apk(ext_shared_objects,loc_shared_objects,self.tmpDirComparison):
+                return True
+            else:
+                return False
+
     def __init__(self, localImg, extImg, rootDirPath = '/tmp/'):
         self.gReadelfProc = None
         if not rootDirPath.endswith('/'):
@@ -181,7 +227,7 @@ class AFSImageComparator:
             self.tmpDirComparison = self.workDirPath + 'jar_apk_cmp/'
             os.mkdir(self.localMountpointPath)
             os.mkdir(self.extMountpointPath)
-            #os.mkdir(self.tmpDirComparison)
+            os.mkdir(self.tmpDirComparison)
             mount_loop(localImg, self.localMountpointPath)
             mount_loop(extImg, self.extMountpointPath)
             return
@@ -189,7 +235,7 @@ class AFSImageComparator:
             print badWorkDirMsg
             return
 
-    cmpMetodDict = { "*.so":compare_shared_object }
+    cmpMetodDict = { "*.so":compare_shared_object, "*.jar": cmp_and_process, "*.apk": cmp_and_process }
     
     def __del__(self):
         self.umount_loop(self.localMountpointPath)
@@ -230,7 +276,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("local_img", help="path to local")
     parser.add_argument("ext_img", help="path to ext")
-    parser.add_argument("--tmp_dir", help="path to tmp-dir", default='/tmp/')
+    parser.add_argument("--tmp_dir", help="path to tmp-dir")
     args = parser.parse_args()
     local_img = args.local_img
     ext_img = args.ext_img
