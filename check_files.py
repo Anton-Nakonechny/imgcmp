@@ -1,7 +1,6 @@
-#!/usr/bin/python
-#/usr/bin/python3.2
+#!/usr/bin/env python
 
-import os, glob, sys ,re, datetime, subprocess, argparse, hashlib, signal, getpass
+import os, glob, sys, re, datetime, subprocess, argparse, hashlib, signal, getpass
 
 def DFS(root, skip_symlinks = 1):
     """Depth first search traversal of directory structure."""
@@ -90,7 +89,9 @@ def readelfCmd(path):
 """Check files existance at both mountpoints and than call to compare function"""
 
 def mount_loop(AbsImgPath, MountPoint):
-    return subprocess.check_call(['sudo','mount', '-o', 'loop', AbsImgPath, MountPoint], shell=False)
+    cmd = ['sudo','mount', '-o', 'loop', AbsImgPath, MountPoint]
+    print ' '.join(cmd)
+    return subprocess.check_call(cmd, shell=False)
 
 def signal_handler(signum, frame):
     global tester
