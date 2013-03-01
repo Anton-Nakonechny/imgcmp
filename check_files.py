@@ -167,22 +167,21 @@ class AFSImageComparator:
 
     def del_tmp_dir(self, path):
         if os.path.isdir(path):
-            subprocess.call(['sudo', 'chown', '-R', str(getpass.getuser()), str(path)], shell=False)
             subprocess.call(['rm','-rf',str(path)], shell=False)
 
     def process_apk(self, refer_ext, refer_loc, tmpDirComparison):
         """directly parser for *.apk and *.jar files (unpack to dex)"""
         root_dir = os.path.dirname(refer_loc)
-        apk_dir=str(re.sub('\..*^','',os.path.basename(refer_loc)))
+        apk_dir=str(re.sub('\..*^','',os.path.basename(refer_loc)))+'/'
         self.del_tmp_dir(str(tmpDirComparison)+apk_dir)
         os.mkdir(tmpDirComparison+apk_dir)
-        locDir = tmpDirComparison+apk_dir+'/loc'
-        extDir = tmpDirComparison+apk_dir+'/ext'
+        locDir = tmpDirComparison+apk_dir+'/loc/'
+        extDir = tmpDirComparison+apk_dir+'/ext/'
         os.mkdir(locDir)
         os.mkdir(extDir)
-        p1_unzip = subprocess.Popen(["sudo", "unzip", refer_loc, "-d", locDir], stdout=subprocess.PIPE)
+        p1_unzip = subprocess.Popen(["unzip", refer_loc, "-d", locDir], stdout=subprocess.PIPE)
         p1_unzip.communicate()
-        p2_unzip = subprocess.Popen(["sudo", "unzip", refer_ext, "-d", extDir], stdout=subprocess.PIPE)
+        p2_unzip = subprocess.Popen(["unzip", refer_ext, "-d", extDir], stdout=subprocess.PIPE)
         p2_unzip.communicate()
         p_dex_loc = subprocess.Popen(["md5sum", str(locDir+'/classes.dex')], stdout=subprocess.PIPE)
         out_loc = p_dex_loc.communicate()[0]
