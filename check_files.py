@@ -61,6 +61,24 @@ def readelfCmd(path):
 
     return command
 
+def hashFromFileOrProc(inpobj, hashfunc, blocksize=65356):
+    typename = type(inpobj).__name__
+
+    if typename == 'file': buf = inpobj.read(blocksize)
+    elif typename == 'Popen': buf = inpobj.stdout.read(blocksize)
+    else:
+        print FAIL_COLOR + 'hashFromFile(): Wrong input object! need file or Popen' + END_COLOR
+        return
+
+    if len(buf) == 0:
+        print WARNING_COLOR + 'hashFromFile(): empty input!' + END_COLOR
+
+    while len(buf) > 0:
+        hashfunc.update(buf)
+        if typename == 'file': buf = inpobj.read(blocksize)
+        else: buf = inpobj.stdout.read(blocksize)
+    return hashfunc.hexdigest()
+
 #def md5_hashlib_v1(cmd):
 #    """ Execute cmd and return MD5 of it's output using hashlib.md5 for stdout.read() """
 #    global p
@@ -134,6 +152,7 @@ class AFSImageComparator:
         else:
             return AFSImageComparator.FILE_DIFF
 
+    # Deprecated method
     def md5_hashlib(self, cmd):
         """ Execute cmd and return MD5 of it's output using hashlib.md5 for communicate() result """
         self.gReadelfProc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -144,6 +163,20 @@ class AFSImageComparator:
         if (perr != ''):
             print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
         #print 'md5: ' + ret
+        return ret
+
+    def hashOfCmd(self, cmd):
+        """ Execute cmd and return hash of it's output using one of hashlib functions """
+        self.gReadelfProc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ret = hashFromFileOrProc(self.gReadelfProc, hashlib.sha1()) # we can define here which of hashlib.algorithms to use
+        err = self.gReadelfProc.stderr.read()
+
+        self.gReadelfProc.stdout.close()
+        self.gReadelfProc.stderr.close()
+
+        if len(err) > 0:
+            print WARNING_COLOR + ' '.join(cmd) + ' : ' + err + END_COLOR
+
         return ret
 
     def umount_loop(self, MountPoint):
@@ -157,13 +190,15 @@ class AFSImageComparator:
             subprocess.call(['lsof', MountPoint])
 
     def compare_shared_object(self, file1, file2):
-        """ Compare md5 for shared object files """
-        # Choose here what algo for md5 sum calculation to use
-        # On Volodymyr Frolov's opinion md5_hashlib_v2 is the best choice
-        sum1 = self.md5_hashlib(readelfCmd(file1))
-        sum2 = self.md5_hashlib(readelfCmd(file2))
+        """ Compare hash for shared object files """
+        cmd1 = readelfCmd(file1)
+        cmd2 = readelfCmd(file2)
+
+        sum1 = self.hashOfCmd(cmd1)
+        sum2 = self.hashOfCmd(cmd2)
+
         if (sum1 == sum2):
-            #print 'MD5 OK: ' + sum1
+            #print 'hash OK: ' + sum1
             return True
         else:
             #print FAIL_COLOR + file1 + ' ' + sum1 + '\n' + file2 + ' ' + sum2 + END_COLOR
