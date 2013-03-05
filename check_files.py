@@ -143,6 +143,11 @@ class AFSImageComparator:
     FILE_MISS = 2
     FILE_MISS_ALLOWED = 3
 
+    #compare_manifests() result codes
+    MF_SAME = 1
+    MF_DIFF = 0
+    MF_NULL = -1
+
     def file_check(self, rel_path, local_mountpoint, ext_mountpoint, check_function, allowed_missings_list):
         local_filepath = re.sub('//', '/',local_mountpoint + rel_path)
         ext_filepath = re.sub('//', '/',ext_mountpoint + rel_path)
@@ -212,34 +217,84 @@ class AFSImageComparator:
         if os.path.isdir(path):
             subprocess.call(['rm','-rf',str(path)], shell=False)
 
-    def process_apk(self, refer_ext, refer_loc, tmpDirComparison):
+    def unzip (self,src,dst):
+        if not os.path.isfile(src):
+            print 'no such file: '+src
+            return
+        os.mkdir(dst)
+        with open(os.devnull, 'w') as dev_null:
+            subprocess.call(["unzip", src, "-d", dst], stdout = dev_null)
+
+    def are_apk_same(self, refer_ext, refer_loc):
         """directly parser for *.apk and *.jar files (unpack to dex)"""
         root_dir = os.path.dirname(refer_loc)
-        apk_dir=str(re.sub('\..*^','',os.path.basename(refer_loc)))+'/'
-        self.del_tmp_dir(str(tmpDirComparison)+apk_dir)
-        os.mkdir(tmpDirComparison+apk_dir)
-        locDir = tmpDirComparison+apk_dir+'/loc/'
-        extDir = tmpDirComparison+apk_dir+'/ext/'
-        os.mkdir(locDir)
-        os.mkdir(extDir)
-        p1_unzip = subprocess.Popen(["unzip", refer_loc, "-d", locDir], stdout=subprocess.PIPE)
-        p1_unzip.communicate()
-        p2_unzip = subprocess.Popen(["unzip", refer_ext, "-d", extDir], stdout=subprocess.PIPE)
-        p2_unzip.communicate()
-        p_dex_loc = subprocess.Popen(["md5sum", str(locDir+'/classes.dex')], stdout=subprocess.PIPE)
-        out_loc = p_dex_loc.communicate()[0]
-        p_dex_ext = subprocess.Popen(["md5sum", str(extDir+'/classes.dex')], stdout=subprocess.PIPE)
-        out_ext = p_dex_ext.communicate()[0]
-        if (out_ext[:33]==out_loc[:33]):
-            #print "Sources are OK "+apk_dir
-            self.del_tmp_dir(tmpDirComparison+apk_dir)
-            return True
-        else:
-            #print tmpDirComparison+apk_dir + FAIL_COLOR + " different sources!"+ END_COLOR
-            #del_tmp_dir(tmpDirComparison+apk_dir)
+        apk_dir=str(self.tmpDirComparison)+str(re.sub('\..*^','',os.path.basename(refer_loc)))+'/'
+        self.del_tmp_dir(apk_dir)
+        os.mkdir(apk_dir)
+        locDir = apk_dir+'/loc/'
+        extDir = apk_dir+'/ext/'
+        self.unzip(refer_loc,locDir)
+        self.unzip(refer_ext,extDir)
+        cmp_result = self.compare_manifests(locDir+'/META-INF/MANIFEST.MF',extDir+'/META-INF/MANIFEST.MF')
+        if cmp_result == AFSImageComparator.MF_DIFF :
             return False
+        elif cmp_result == AFSImageComparator.MF_NULL:
+            #maybe manifests are NULL,thus try to take md5 directly
+            if not self.compare_classes(locDir+'/classes.dex',extDir+'/classes.dex'):
+                return False
+            else:
+                return True
+        else:
+            self.del_tmp_dir(apk_dir)
+            return True
 
-    def cmp_and_process(self, ext_shared_objects,loc_shared_objects):
+    def compare_classes(self,locPath,extPath):
+        if not os.path.isfile(str(locPath)):
+            return False #workaround. We have to discuss how to parse if no classes.dex and manifest.ml is empty
+        else:
+            with open (locPath) as class_loc:
+                class_hash_loc = hashFromFileOrProc(class_loc,hashlib.sha1())
+            with open (extPath) as class_ext:
+                class_hash_ext = hashFromFileOrProc(class_ext,hashlib.sha1())
+            if (class_hash_loc==class_hash_ext):
+                return True
+            else:
+                #print FAIL_COLOR + " different md5sum sources! "+ END_COLOR+locDir
+                return False
+
+    def parse_manifest(self,pathMF):
+        manifestMF={}
+        with open(pathMF,'r') as fileMF:
+            lineMF = str(fileMF.readline())
+            while (lineMF):
+                lineMF = str(fileMF.readline())
+                if (lineMF.startswith('Name')):
+                    # skipping binary manifests.xml workaround
+                    if (lineMF.endswith('AndroidManifest.xml\r\n')):
+                        continue
+                    lineMF_sha = str(fileMF.readline())
+                    if (lineMF_sha.startswith('SHA1-Digest')):
+                        manifestMF[lineMF[6:]] = lineMF_sha[13:]
+        return manifestMF
+
+    def compare_manifests(self,locPath,extPath):
+        manifest_loc = self.parse_manifest(locPath)
+        manifest_ext = self.parse_manifest(extPath)
+        #maybe manifests are NULL,thus try to take md5 directly
+        if not manifest_loc and not manifest_ext:
+            return AFSImageComparator.MF_NULL
+        for cheking_path in manifest_ext.keys():
+            if not cheking_path in manifest_loc:
+                #print 'No such Attribute: '+ FAIL_COLOR +'Different sources, at least '+ END_COLOR, locDir+cheking_path
+                return AFSImageComparator.MF_DIFF
+            if (manifest_ext[cheking_path]==manifest_loc[cheking_path]):
+                pass
+            else:
+                #print FAIL_COLOR +'Different sources hash '+ END_COLOR, locDir+cheking_path
+                return AFSImageComparator.MF_DIFF
+        #print locDir, 'Sources hash ore OK'
+
+    def cmp_and_process_java(self, ext_shared_objects,loc_shared_objects):
         p_ext = subprocess.Popen(['md5sum',ext_shared_objects], stdout=subprocess.PIPE)
         out_ext=p_ext.communicate()[0]
         p_loc = subprocess.Popen(['md5sum',loc_shared_objects], stdout=subprocess.PIPE)
@@ -248,10 +303,7 @@ class AFSImageComparator:
             #print "archives are OK"
             return True
         else:
-            if self.process_apk(ext_shared_objects,loc_shared_objects,self.tmpDirComparison):
-                return True
-            else:
-                return False
+            return self.are_apk_same(ext_shared_objects,loc_shared_objects)
 
     def __init__(self, localImg, extImg, rootDirPath = '/tmp/'):
         self.gReadelfProc = None
@@ -280,7 +332,7 @@ class AFSImageComparator:
             print badWorkDirMsg
             return
 
-    cmpMetodDict = { "*.so":compare_shared_object, "*.jar": cmp_and_process, "*.apk": cmp_and_process }
+    cmpMetodDict = { "*.so": compare_shared_object, "*.jar": cmp_and_process_java, "*.apk": cmp_and_process_java }
     
     def __del__(self):
         self.umount_loop(self.localMountpointPath)
