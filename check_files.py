@@ -122,14 +122,18 @@ def signal_handler(signum, frame):
     exitstr = 'Exiting on signal: ' + str(signum)
     sys.exit(exitstr)
 
-#WARNING_COLOR = '\033[93m'
-#FAIL_COLOR = '\033[91m'
-#OK_COLOR = '\033[92m'
-#END_COLOR    = '\033[0m'
-WARNING_COLOR = ''
-FAIL_COLOR = ''
-OK_COLOR = ''
-END_COLOR    = ''
+if sys.stdout.isatty():
+    # output to console
+    WARNING_COLOR = '\033[93m'
+    FAIL_COLOR = '\033[91m'
+    OK_COLOR = '\033[92m'
+    END_COLOR    = '\033[0m'
+else:
+    # output is redirected
+    WARNING_COLOR = ''
+    FAIL_COLOR = ''
+    OK_COLOR = ''
+    END_COLOR    = ''
 
 class AFSImageComparator:
 
