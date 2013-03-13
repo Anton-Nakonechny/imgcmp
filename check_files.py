@@ -251,7 +251,9 @@ class AFSImageComparator:
 
     def __init__(self, localImg, extImg, rootDirPath = '/tmp/'):
         self.gReadelfProc = None
-        if not rootDirPath.endswith('/'):
+        if rootDirPath is None:
+            rootDirPath = '/tmp/'
+        elif not rootDirPath.endswith('/'):
             rootDirPath += '/'
         badWorkDirMsg = "Bad workdir"
         nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
@@ -315,7 +317,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("local_img", help="path to local")
     parser.add_argument("ext_img", help="path to ext")
-    parser.add_argument("--tmp_dir", help="path to tmp-dir")
+    parser.add_argument("--tmp-dir", help="path to tmp-dir")
     args = parser.parse_args()
     local_img = args.local_img
     ext_img = args.ext_img
@@ -326,9 +328,10 @@ def main():
 
     if not (os.path.isfile(local_img) and
         os.path.isfile(ext_img)):
-        parser.print_help()
+        print FAIL_COLOR + "Toubles while accessing system images." + END_COLOR
         print local_img
         print ext_img
+        parser.print_help()
         sys.exit(1)
 
     tester = AFSImageComparator(realpath(local_img), realpath(ext_img), tmp_root)
