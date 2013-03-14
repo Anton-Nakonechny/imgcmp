@@ -235,15 +235,12 @@ class AFSImageComparator:
         extDir = apk_dir+'/ext/'
         self.unzip(refer_loc,locDir)
         self.unzip(refer_ext,extDir)
-        cmp_result = self.compare_manifests(locDir+'/META-INF/MANIFEST.MF',extDir+'/META-INF/MANIFEST.MF')
+        cmp_result = self.compare_manifests(locDir + '/META-INF/MANIFEST.MF', extDir + '/META-INF/MANIFEST.MF')
         if cmp_result == AFSImageComparator.MF_DIFF :
             return False
         elif cmp_result == AFSImageComparator.MF_NULL:
             #maybe manifests are NULL,thus try to take md5 directly
-            if not self.compare_classes(locDir+'/classes.dex',extDir+'/classes.dex'):
-                return False
-            else:
-                return True
+            return self.compare_classes(locDir + '/classes.dex', extDir + '/classes.dex')
         else:
             self.del_tmp_dir(apk_dir)
             return True
@@ -259,7 +256,7 @@ class AFSImageComparator:
             if (class_hash_loc==class_hash_ext):
                 return True
             else:
-                #print FAIL_COLOR + " different md5sum sources! "+ END_COLOR+locDir
+                print '\nManifest is null. classes.dex hashsums are different.'
                 return False
 
     def parse_manifest(self,pathMF):
@@ -285,11 +282,13 @@ class AFSImageComparator:
             return AFSImageComparator.MF_NULL
         for cheking_path in manifest_ext.keys():
             if not cheking_path in manifest_loc:
+                print ('\nno such path: ' + cheking_path).rstrip()
                 #print 'No such Attribute: '+ FAIL_COLOR +'Different sources, at least '+ END_COLOR, locDir+cheking_path
                 return AFSImageComparator.MF_DIFF
-            if (manifest_ext[cheking_path]==manifest_loc[cheking_path]):
+            if (manifest_ext[cheking_path] == manifest_loc[cheking_path]):
                 pass
             else:
+                print ('\ndifference in: ' + cheking_path).rstrip()
                 #print FAIL_COLOR +'Different sources hash '+ END_COLOR, locDir+cheking_path
                 return AFSImageComparator.MF_DIFF
         #print locDir, 'Sources hash ore OK'
