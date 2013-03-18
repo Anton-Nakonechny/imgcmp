@@ -151,6 +151,47 @@ class AFSImageComparator:
     MF_DIFF = 0
     MF_NULL = -1
 
+    def __init__(self, localImg, extImg, rootDirPath):
+        self.gReadelfProc = None
+        self.localMountpointPath = None
+        self.extMountpointPath = None
+        self.prepare_work_dir(localImg, extImg, rootDirPath)
+
+    def __del__(self):
+        if self.localMountpointPath:
+            self.umount_loop(self.localMountpointPath)
+        if self.extMountpointPath:
+            self.umount_loop(self.extMountpointPath)
+
+    def prepare_work_dir(self, localImg, extImg, rootDirPath):
+        if (rootDirPath is None) or (not rootDirPath):
+            rootDirPath = '/tmp/'
+        elif not rootDirPath.endswith('/'):
+            rootDirPath += '/'
+        badWorkDirMsg = FAIL_COLOR + "Bad workdir" + END_COLOR
+        nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
+        self.workDirPath = rootDirPath + nowString + '/'
+        try:
+            if not (os.path.isdir(rootDirPath) and os.access(rootDirPath, os.W_OK)):
+                print badWorkDirMsg
+                return ()
+            os.mkdir(self.workDirPath)
+            self.tmpDirComparison = self.workDirPath + 'jar_apk_cmp/'
+            os.mkdir(self.tmpDirComparison)
+
+            if (not localImg) or (not extImg) or (localImg is None) or (extImg is None):
+                self.localMountpointPath = None
+                self.extMountpointPath = None
+            else:
+                self.localMountpointPath = self.workDirPath + 'local_root/'
+                self.extMountpointPath = self.workDirPath + 'ext_root/'
+                os.mkdir(self.localMountpointPath)
+                os.mkdir(self.extMountpointPath)
+                mount_loop(localImg, self.localMountpointPath)
+                mount_loop(extImg, self.extMountpointPath)
+        except OSError:
+            print badWorkDirMsg
+
     def file_check(self, rel_path, local_mountpoint, ext_mountpoint, check_function, allowed_missings_list):
         local_filepath = re.sub('//', '/',local_mountpoint + rel_path)
         ext_filepath = re.sub('//', '/',ext_mountpoint + rel_path)
@@ -307,47 +348,8 @@ class AFSImageComparator:
         else:
             return self.are_apk_same(ext_shared_objects,loc_shared_objects)
 
-    def __init__(self, localImg, extImg, rootDirPath):
-        self.gReadelfProc = None
-        self.localMountpointPath = None
-        self.extMountpointPath = None
-
-        if (rootDirPath is None) or (not rootDirPath):
-            rootDirPath = '/tmp/'
-        elif not rootDirPath.endswith('/'):
-            rootDirPath += '/'
-        badWorkDirMsg = FAIL_COLOR + "Bad workdir" + END_COLOR
-        nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
-        self.workDirPath = rootDirPath + nowString + '/'
-        try:
-            if not (os.path.isdir(rootDirPath) and os.access(rootDirPath, os.W_OK)):
-                print badWorkDirMsg
-                return ()
-            os.mkdir(self.workDirPath)
-            self.tmpDirComparison = self.workDirPath + 'jar_apk_cmp/'
-            os.mkdir(self.tmpDirComparison)
-
-            if (not localImg) or (not extImg) or (localImg is None) or (extImg is None):
-                self.localMountpointPath = None
-                self.extMountpointPath = None
-            else:
-                self.localMountpointPath = self.workDirPath + 'local_root/'
-                self.extMountpointPath = self.workDirPath + 'ext_root/'
-                os.mkdir(self.localMountpointPath)
-                os.mkdir(self.extMountpointPath)
-                mount_loop(localImg, self.localMountpointPath)
-                mount_loop(extImg, self.extMountpointPath)
-        except OSError:
-            print badWorkDirMsg
-
     cmpMetodDict = { "*.so": compare_shared_object, "*.jar": cmp_and_process_java, "*.apk": cmp_and_process_java }
     
-    def __del__(self):
-        if self.localMountpointPath:
-            self.umount_loop(self.localMountpointPath)
-        if self.extMountpointPath:
-            self.umount_loop(self.extMountpointPath)
-
     def run(self):
         if (self.localMountpointPath is None) or (self.extMountpointPath is None):
             print FAIL_COLOR + "Cannot run dummy AFSImageComparator!" + END_COLOR + "\nInstances without .img files are for unit tests only."
