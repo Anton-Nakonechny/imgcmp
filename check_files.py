@@ -170,11 +170,21 @@ class AFSImageComparator:
             rootDirPath += '/'
         badWorkDirMsg = FAIL_COLOR + "Bad workdir" + END_COLOR
         nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
-        self.workDirPath = rootDirPath + nowString + '/'
+        self.workDirPath = rootDirPath + nowString
+        new_dir_path = self.workDirPath
+        index = 1;
+        while os.path.exists(new_dir_path):
+            if new_dir_path[-3] == ":":
+                new_dir_path = new_dir_path + '-' + str(index)
+            else:
+                old_index_len = len(str(index-1))
+                new_dir_path = new_dir_path[:-(old_index_len+1)] + '-' + str(index)
+                index += 1
+        self.workDirPath = new_dir_path + '/'
         try:
             if not (os.path.isdir(rootDirPath) and os.access(rootDirPath, os.W_OK)):
                 print badWorkDirMsg
-                return ()
+                return
             os.mkdir(self.workDirPath)
             self.tmpDirComparison = self.workDirPath + 'jar_apk_cmp/'
             os.mkdir(self.tmpDirComparison)
