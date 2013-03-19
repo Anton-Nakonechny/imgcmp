@@ -15,4 +15,5 @@ class UnitTest_check_files(unittest.TestCase):
         self.assertFalse(res)
 
 if __name__ == '__main__':
-    unittest.main()
+    suite = unittest.TestLoader().loadTestsFromTestCase(UnitTest_check_files)
+    unittest.TextTestRunner(verbosity=2).run(suite)
