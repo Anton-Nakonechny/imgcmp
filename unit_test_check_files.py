@@ -23,6 +23,11 @@ Tests may be run as follows:
 
 import sys
 import unittest
+import os
+import time
+import signal
+
+from subprocess import Popen, PIPE
 
 from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR
 
@@ -37,10 +42,45 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
     def test_posix_signals_handling(self):
         """
         Runs image checking, kills the script with SIGTERM and SIGINT and checks,
-        if images are unmounted and workdir is removed.
+        if images are unmounted.
+        If test fails, it makes sense to have a look at time.sleep arguments values.
         """
-        # not implemented yet
-        pass
+        imgdir = "unit_test_files/img_.same_allowed/"
+        img1 = os.path.normpath(os.path.join(os.getcwd(), imgdir + "same_in_allowed_loc.img"))
+        img2 = os.path.normpath(os.path.join(os.getcwd(), imgdir + "same_in_allowed_ext.img"))
+
+        def run_compare_packages_script():
+            args = ["python", "check_files.py", img1, img2]
+            process = Popen(args, stdout=PIPE)
+            return process
+
+        def are_images_umounted():
+            res = True
+            mounts = str(Popen(["mount"], stdout=PIPE).communicate())
+            if img1 in mounts or img2 in mounts:
+                res = False
+            return res
+
+        def umount_images(areMounted):
+            if areMounted != True:
+                args = ["sudo", "umount", img1]
+                Popen(args)
+                args = ["sudo", "umount", img2]
+                Popen(args)
+
+        def check_signal_handling(sig):
+            process = run_compare_packages_script()
+            time.sleep(0.1)     # let script have time to mount loops
+            process.send_signal(sig)
+            time.sleep(0.2)     # let script have time to umount loops after catching signal
+            areMounted = are_images_umounted()
+            umount_images(areMounted)
+            self.assertTrue(areMounted)
+
+        signalsToCheck = [signal.SIGINT, signal.SIGTERM]
+        for sig in signalsToCheck:
+            check_signal_handling(sig)
+            time.sleep(0.2)
 
     def test_preparation_and_cleaning_workdir(self):
         # not implemented yet
