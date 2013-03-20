@@ -67,16 +67,30 @@ class CompareImagesTestSuite(unittest.TestCase):
         compares two images, in one of which some files
         are missing and they are not in allowed list
         """
-        # not implemented yet
-        pass
+        tester = AFSImageComparator("unit_test_files/img_.missed_not_allowed/missed_not_in_allowed_loc.img",
+                                    "unit_test_files/img_.missed_not_allowed/missed_not_in_allowed_ext.img","")
+        res = tester.run()
+        self.assertFalse(res)
+
+        tester = AFSImageComparator("unit_test_files/img_.same_not_allowed/same_not_in_allowed_loc.img",
+                                    "unit_test_files/img_.same_not_allowed/same_not_in_allowed_ext.img","")
+        res = tester.run()
+        self.assertTrue(res)
 
     def test_file_miss_allowed(self):
         """
         compares two images, in one of which some files
         are missing and they are in allowed list
         """
-        # not implemented yet
-        pass
+        tester = AFSImageComparator("unit_test_files/img_.missed_allowed/missed_in_allowed_loc.img",
+                                    "unit_test_files/img_.missed_allowed/missed_in_allowed_ext.img","")
+        res = tester.run()
+        self.assertTrue(res)
+
+        tester = AFSImageComparator("unit_test_files/img_.same_allowed/same_in_allowed_loc.img",
+                                    "unit_test_files/img_.same_allowed/same_in_allowed_ext.img","")
+        res = tester.run()
+        self.assertTrue(res)
 
     def test_equal_images(self):
         """ compares two equal images """
@@ -90,31 +104,39 @@ class CompareJavaTestSuite(unittest.TestCase):
     def test_jar_comparison(self):
         tester = AFSImageComparator("","","")
 
-        res = tester.cmp_and_process_java('unit_test_files/jar_.mf_differ_no_classes/qewl_ext.jar', 'unit_test_files/jar_.mf_differ_no_classes/qewl_loc.jar')
+        res = tester.cmp_and_process_java('unit_test_files/jar_.mf_differ_no_classes/qewl_ext.jar',
+                                          'unit_test_files/jar_.mf_differ_no_classes/qewl_loc.jar')
         self.assertFalse(res)
 
-        res = tester.cmp_and_process_java('unit_test_files/jar_.mf_same_no_classes/qewl_ext_same.jar', 'unit_test_files/jar_.mf_same_no_classes/qewl_loc_same.jar')
+        res = tester.cmp_and_process_java('unit_test_files/jar_.mf_same_no_classes/qewl_ext_same.jar',
+                                          'unit_test_files/jar_.mf_same_no_classes/qewl_loc_same.jar')
         self.assertTrue(res)
 
-        res = tester.cmp_and_process_java('unit_test_files/jar_.classes_differ_no_mf/apache-xml_ext.jar', 'unit_test_files/jar_.classes_differ_no_mf/apache-xml_loc.jar')
+        res = tester.cmp_and_process_java('unit_test_files/jar_.classes_differ_no_mf/apache-xml_ext.jar',
+                                          'unit_test_files/jar_.classes_differ_no_mf/apache-xml_loc.jar')
         self.assertFalse(res)
 
-        res = tester.cmp_and_process_java('unit_test_files/jar_.classes_same_no_mf/apache-xml_ext_same.jar', 'unit_test_files/jar_.classes_same_no_mf/apache-xml_loc_same.jar')
+        res = tester.cmp_and_process_java('unit_test_files/jar_.classes_same_no_mf/apache-xml_ext_same.jar',
+                                          'unit_test_files/jar_.classes_same_no_mf/apache-xml_loc_same.jar')
         self.assertTrue(res)
 
     def test_apk_comparison(self):
         tester = AFSImageComparator("","","")
 
-        res = tester.cmp_and_process_java('unit_test_files/apk_.mf_differ_classes_differ/Browser_ext.apk', 'unit_test_files/apk_.mf_differ_classes_differ/Browser_loc.apk')
+        res = tester.cmp_and_process_java('unit_test_files/apk_.mf_differ_classes_differ/Browser_ext.apk',
+                                         'unit_test_files/apk_.mf_differ_classes_differ/Browser_loc.apk')
         self.assertFalse(res)
 
-        res = tester.cmp_and_process_java('unit_test_files/apk_.mf_same_classes_same/Browser_ext_same.apk', 'unit_test_files/apk_.mf_same_classes_same/Browser_loc_same.apk')
+        res = tester.cmp_and_process_java('unit_test_files/apk_.mf_same_classes_same/Browser_ext_same.apk',
+                                          'unit_test_files/apk_.mf_same_classes_same/Browser_loc_same.apk')
         self.assertTrue(res)
 
-        res = tester.cmp_and_process_java('unit_test_files/apk_.mf_length_differ/DemoMode_ext.apk', 'unit_test_files/apk_.mf_length_differ/DemoMode_loc.apk')
+        res = tester.cmp_and_process_java('unit_test_files/apk_.mf_length_differ/DemoMode_ext.apk',
+                                          'unit_test_files/apk_.mf_length_differ/DemoMode_loc.apk')
         self.assertFalse(res)
 
-        res = tester.cmp_and_process_java('unit_test_files/apk_.mf_length_same/DemoMode_ext_same.apk', 'unit_test_files/apk_.mf_length_same/DemoMode_loc_same.apk')
+        res = tester.cmp_and_process_java('unit_test_files/apk_.mf_length_same/DemoMode_ext_same.apk',
+                                          'unit_test_files/apk_.mf_length_same/DemoMode_loc_same.apk')
         self.assertTrue(res)
 
 
@@ -124,10 +146,12 @@ class CompareSharedLibrariesTestSuite(unittest.TestCase):
     def test_compare_shared_object(self):
         tester = AFSImageComparator("","","")
 
-        res = tester.compare_shared_object('unit_test_files/so_.text_same/local_camera.omap4.so', 'unit_test_files/so_.text_same/remote_camera.omap4.so')
+        res = tester.compare_shared_object('unit_test_files/so_.text_same/local_camera.omap4.so',
+                                           'unit_test_files/so_.text_same/remote_camera.omap4.so')
         self.assertTrue(res)
 
-        res = tester.compare_shared_object('unit_test_files/so_.text_differ/local_libbcc.so', 'unit_test_files/so_.text_differ/remote_libbcc.so')
+        res = tester.compare_shared_object('unit_test_files/so_.text_differ/local_libbcc.so',
+                                           'unit_test_files/so_.text_differ/remote_libbcc.so')
         self.assertFalse(res)
 
 
