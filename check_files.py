@@ -1,6 +1,16 @@
 #!/usr/bin/env python
 
-import os, glob, sys, re, datetime, subprocess, argparse, hashlib, signal, getpass
+import os
+import glob
+import sys
+import re
+import datetime
+import subprocess
+import argparse
+import hashlib
+import signal
+import getpass
+import shutil
 
 def DFS(root, skip_symlinks = 1):
     """Depth first search traversal of directory structure."""
@@ -110,7 +120,7 @@ def hashFromFileOrProc(inpobj, hashfunc, blocksize=65356):
 """Check files existance at both mountpoints and than call to compare function"""
 
 def mount_loop(AbsImgPath, MountPoint):
-    cmd = ['sudo','mount', '-o', 'loop', AbsImgPath, MountPoint]
+    cmd = ['sudo','mount', '-o', 'loop,ro', AbsImgPath, MountPoint]
     print ' '.join(cmd)
     return subprocess.check_call(cmd, shell=False)
 
@@ -162,6 +172,9 @@ class AFSImageComparator:
             self.umount_loop(self.localMountpointPath)
         if self.extMountpointPath:
             self.umount_loop(self.extMountpointPath)
+        if self.workDirPath:
+            shutil.rmtree(self.workDirPath)
+            print "removed " + self.workDirPath
 
     def prepare_work_dir(self, localImg, extImg, rootDirPath):
         if (rootDirPath is None) or (not rootDirPath):
