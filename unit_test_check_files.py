@@ -46,8 +46,19 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
         # not implemented yet
         pass
 
+    def test_lots_of_dummy_AFSImageComparator_instances(self):
+        tester = AFSImageComparator("","","")
+        tester2 = AFSImageComparator("","","")
+        tester3 = AFSImageComparator("","","")
+        tester4 = AFSImageComparator("","","")
+        tester5 = AFSImageComparator("","","")
+        tester6 = AFSImageComparator("","","")
+        tester7 = AFSImageComparator("","","")
+        tester8 = AFSImageComparator("","","")
+        tester9 = AFSImageComparator("","","")
+        tester10 = AFSImageComparator("","","")
+        tester11 = AFSImageComparator("","","")
 
-# This suite is intended to check test images
 class CompareImagesTestSuite(unittest.TestCase):
     """ This suite is intended to check test images """
 
