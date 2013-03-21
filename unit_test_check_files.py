@@ -134,8 +134,10 @@ class CompareImagesTestSuite(unittest.TestCase):
 
     def test_equal_images(self):
         """ compares two equal images """
-        # not implemented yet
-        pass
+        tester = AFSImageComparator("unit_test_files/img_.same_allowed/same_in_allowed_loc.img",
+                                    "unit_test_files/img_.same_allowed/same_in_allowed_loc.img","")
+        res = tester.run()
+        self.assertTrue(res)
 
 
 class CompareJavaTestSuite(unittest.TestCase):
