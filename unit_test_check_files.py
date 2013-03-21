@@ -29,7 +29,7 @@ import signal
 
 from subprocess import Popen, PIPE
 
-from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR
+from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, realpath
 
 class GeneralScriptBehaviourTestSuite(unittest.TestCase):
     """
@@ -46,8 +46,8 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
         If test fails, it makes sense to have a look at time.sleep arguments values.
         """
         imgdir = "unit_test_files/img_.same_allowed/"
-        img1 = os.path.normpath(os.path.join(os.getcwd(), imgdir + "same_in_allowed_loc.img"))
-        img2 = os.path.normpath(os.path.join(os.getcwd(), imgdir + "same_in_allowed_ext.img"))
+        img1 = realpath(imgdir + "same_in_allowed_loc.img")
+        img2 = realpath(imgdir + "same_in_allowed_ext.img")
 
         def run_compare_packages_script():
             args = ["python", "check_files.py", img1, img2]

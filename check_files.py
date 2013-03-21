@@ -25,16 +25,7 @@ def DFS(root, skip_symlinks = 1):
         stack.extend(subdirs(d, skip_symlinks))
 
 def realpath(fname):
-#if realpath utility is available, use it, instead of abspath
-    result = os.path.abspath(fname)
-    try:
-        if sys.version_info < (2, 7):
-            result = subprocess.Popen(['realpath', fname], stdout=subprocess.PIPE).communicate()[0].rstrip()
-        else:
-            result = subprocess.check_output(['realpath', fname]).rstrip()
-    except OSError, e:
-        print 'realpath OSError:', e
-    return result
+    return os.path.normpath(os.path.join(os.getcwd(), fname))
 
 def subdirs(root, skip_symlinks = 1):
     """Given a root directory, returns the first-level subdirectories."""
