@@ -75,15 +75,13 @@ def get_elf_sections(path):
         sections.append(section)
     return sections
 
-def readelfCmd(path):
-    """ Generate command from retrieved section list file path """
-    sections = get_elf_sections(path)
-
-    command = [('-x' + i) for i in sections] # add -x to each section for hex-dump
-    command.insert(0, 'readelf')             # add 'readelf' command
-    command.append(path)
-
-    return command
+def determine_missing_elf_sections(filepath, sections1, sections2):
+    retval = True
+    missed = sections2.difference(sections1) # sections2 - sections1
+    if len(missed) != 0:
+        print "{0} has missing sections: {1}".format(filepath, ", ".join(missed))
+        retval = False
+    return retval
 
 def hashFromFileOrProc(inpobj, hashfunc, blocksize=65356):
     typename = type(inpobj).__name__
@@ -278,18 +276,21 @@ class AFSImageComparator:
 
     def compare_shared_object(self, file1, file2):
         """ Compare hash for shared object files """
-        cmd1 = readelfCmd(file1)
-        cmd2 = readelfCmd(file2)
+        result = True
+        sections1 = set(get_elf_sections(file1))
+        sections2 = set(get_elf_sections(file2))
+        result = determine_missing_elf_sections(file1, sections1, sections2) and determine_missing_elf_sections(file2, sections2, sections1)
 
-        sum1 = self.hashOfCmd(cmd1)
-        sum2 = self.hashOfCmd(cmd2)
-
-        if (sum1 == sum2):
-            #print 'hash OK: ' + sum1
-            return True
-        else:
-            #print FAIL_COLOR + file1 + ' ' + sum1 + '\n' + file2 + ' ' + sum2 + END_COLOR
-            return False
+        sections = sections1.intersection(sections2) # common section list
+        for section in sections:
+            cmd1 = ["readelf", "-x", section, file1]
+            cmd2 = ["readelf", "-x", section, file2]
+            sum1 = self.hashOfCmd(cmd1)
+            sum2 = self.hashOfCmd(cmd2)
+            if (sum1 != sum2):
+                print "{0}{1} has different {2} ELF section{3}".format(FAIL_COLOR, file1, section, END_COLOR)
+                result = False
+        return result
 
     def del_tmp_dir(self, path):
         if os.path.isdir(path):
