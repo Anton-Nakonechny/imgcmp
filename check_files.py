@@ -54,10 +54,30 @@ def file_in_list (rel_path, local_list):
             return True
     return False
 
+def get_elf_sections(path):
+    """
+    The function gets the list of all ELF sections and returns
+    only the list of sections we're interested in:
+     - .text (.rel.text, .init.text and other "*.text")
+     - .data (and other "*.data")
+     - .rodata (and other "*.rodata")
+    """
+    sections = []
+    cmd = ["readelf", "-S", "-W", path]
+    readelfOutput = str(subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE).communicate())
+    pattern = "(\s[a-z.]*\.)(text|data|rodata)(\.[a-z.]*)*\s"
+    matches = re.findall(pattern, readelfOutput)
+    # Example of element in matches:
+    # (' .rel.', 'text')
+    for m in matches:
+        section = "".join(m).strip()
+        sections.append(section)
+    return sections
+
 def readelfCmd(path):
-    """ Generate command list from file path """
-    #sections = ['.nonexisting']
-    sections = ['.text']
+    """ Generate command from retrieved section list file path """
+    sections = get_elf_sections(path)
 
     command = [('-x' + i) for i in sections] # add -x to each section for hex-dump
     command.insert(0, 'readelf')             # add 'readelf' command
@@ -362,7 +382,8 @@ class AFSImageComparator:
         else:
             return self.are_apk_same(ext_shared_objects,loc_shared_objects)
 
-    cmpMetodDict = { "*.so": compare_shared_object, "*.jar": cmp_and_process_java, "*.apk": cmp_and_process_java }
+    cmpMetodDict = {"*.so": compare_shared_object, "*.ko": compare_shared_object,
+                    "*.jar": cmp_and_process_java, "*.apk": cmp_and_process_java }
     
     def run(self):
         if (self.localMountpointPath is None) or (self.extMountpointPath is None):
