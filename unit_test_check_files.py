@@ -29,7 +29,7 @@ import signal
 
 from subprocess import Popen, PIPE
 
-from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, realpath
+from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, realpath, get_elf_sections, determine_missing_elf_sections
 
 class GeneralScriptBehaviourTestSuite(unittest.TestCase):
     """
@@ -201,8 +201,26 @@ class CompareJavaTestSuite(unittest.TestCase):
         self.assertTrue(res)
 
 
-class CompareSharedLibrariesTestSuite(unittest.TestCase):
+class CompareELFObjectsTestSuite(unittest.TestCase):
     """ This suite is intended to check shared libraries comparison """
+
+    def test_elf_sections_not_empty(self):
+        sections = get_elf_sections('unit_test_files/ko_.testmodules/nfs.ko')
+        res = len(sections) != 0
+        self.assertTrue(res)
+
+    def test_missing_elf_sections(self):
+        sections1 = set(['.text', '.data', '.rodata'])
+        sections2 = set(['.text', '.data', '.rodata'])
+        res = determine_missing_elf_sections('sections1', sections1, sections2)
+        self.assertTrue(res)
+
+        sections2 = set(['.text', '.data', '.rodata', '.rel.text'])
+        res = determine_missing_elf_sections('sections1', sections1, sections2)
+        self.assertFalse(res)
+
+        res = determine_missing_elf_sections('sections2', sections2, sections1)
+        self.assertTrue(res)
 
     def test_compare_shared_object(self):
         tester = AFSImageComparator("","","")
@@ -215,6 +233,16 @@ class CompareSharedLibrariesTestSuite(unittest.TestCase):
                                            'unit_test_files/so_.text_differ/remote_libbcc.so')
         self.assertFalse(res)
 
+    def test_compare_kernel_modules(self):
+        tester = AFSImageComparator("","","")
+
+        res = tester.compare_shared_object('unit_test_files/ko_.testmodules/local_lib80211_same.ko',
+                                           'unit_test_files/ko_.testmodules/remote_lib80211_same.ko')
+        self.assertTrue(res)
+
+        res = tester.compare_shared_object('unit_test_files/ko_.testmodules/local_lib80211_same.ko',
+                                           'unit_test_files/ko_.testmodules/nfs.ko')
+        self.assertFalse(res)
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(GeneralScriptBehaviourTestSuite)
@@ -226,5 +254,5 @@ if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(CompareJavaTestSuite)
     unittest.TextTestRunner(verbosity=2).run(suite)
 
-    suite = unittest.TestLoader().loadTestsFromTestCase(CompareSharedLibrariesTestSuite)
+    suite = unittest.TestLoader().loadTestsFromTestCase(CompareELFObjectsTestSuite)
     unittest.TextTestRunner(verbosity=2).run(suite)
