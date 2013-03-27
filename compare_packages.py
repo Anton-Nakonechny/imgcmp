@@ -1,8 +1,16 @@
 #!/usr/bin/env python
 
-import subprocess, os, argparse, sys, tarfile, zipfile, re, datetime
-from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, linux_like_find
+import subprocess
+import os
+import argparse
+import sys
+import tarfile
+import zipfile
+import re
+import datetime
+
 from operator import itemgetter
+from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, linux_like_find
 
 def extractSystemImage(archive, folder):
     try:
