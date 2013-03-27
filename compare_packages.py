@@ -35,10 +35,10 @@ def addCTimeKey(x):
     return [x, os.path.getctime(x)]
 
 def findNewestBuild(folder, template):
-#the addCTimeKey function in the next line is expected to return list of it's argument and hash-key (i.g. ctime) [x, hash(x)]
-   FindedList =  sorted([addCTimeKey(x) for x in linux_like_find (folder, template)], key=itemgetter(1), reverse=True)
-#   print FindedList
-   return FindedList[0][0] 
+    #the addCTimeKey function in the next line is expected to return list of it's argument and hash-key (i.e. ctime) [x, hash(x)]
+    FoundList =  sorted([addCTimeKey(x) for x in linux_like_find (folder, template)], key=itemgetter(1), reverse=True)
+    #print FoundList
+    return FoundList[0][0]
 
 def main():
     parser = argparse.ArgumentParser()
