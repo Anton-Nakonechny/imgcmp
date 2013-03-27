@@ -66,7 +66,7 @@ def get_elf_sections(path):
     cmd = ["readelf", "-S", "-W", path]
     readelfOutput = str(subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE).communicate())
-    pattern = "(\s[a-z.]*\.)(text|data|rodata)(\.[a-z.]*)*\s"
+    pattern = "(\s[a-zA-Z_\.]*)+(text|data|rodata)([\.:][A-Za-z_\.]*)*\s"
     matches = re.findall(pattern, readelfOutput)
     # Example of element in matches:
     # (' .rel.', 'text')
