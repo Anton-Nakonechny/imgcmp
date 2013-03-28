@@ -83,7 +83,7 @@ def determine_missing_elf_sections(filepath, sections1, sections2):
         retval = False
     return retval
 
-def hashFromFileOrProc(inpobj, hashfunc, blocksize=65356):
+def get_hash_from_file_or_process(inpobj, hashfunc, blocksize=65356):
     typename = type(inpobj).__name__
 
     if typename == 'file': buf = inpobj.read(blocksize)
@@ -93,12 +93,17 @@ def hashFromFileOrProc(inpobj, hashfunc, blocksize=65356):
         return
 
     if len(buf) == 0:
-        print WARNING_COLOR + 'hashFromFile(): empty input!' + END_COLOR
+        if typename == 'file':
+            print WARNING_COLOR + 'get_hash_from_file_or_process(): empty input!', inpobj.name + END_COLOR
+        else:
+            print WARNING_COLOR + 'get_hash_from_file_or_process(): empty input (Popen object)!' + END_COLOR
 
     while len(buf) > 0:
         hashfunc.update(buf)
-        if typename == 'file': buf = inpobj.read(blocksize)
-        else: buf = inpobj.stdout.read(blocksize)
+        if typename == 'file':
+            buf = inpobj.read(blocksize)
+        else:
+            buf = inpobj.stdout.read(blocksize)
     return hashfunc.hexdigest()
 
 #def md5_hashlib_v1(cmd):
@@ -138,7 +143,8 @@ def signal_handler(signum, frame):
     try:
         if tester:
             del tester
-#Print termination message instead off falling to NameError exception for non-existing object in corner case of early script termination.
+#Print termination message instead off falling to NameError exception
+#for non-existing object in corner case of early script termination.
     except NameError:
         pass
     exitstr = 'Exiting on signal: ' + str(signum)
@@ -164,11 +170,6 @@ class AFSImageComparator:
     FILE_DIFF = 1
     FILE_MISS = 2
     FILE_MISS_ALLOWED = 3
-
-    #compare_manifests() result codes
-    MF_SAME = 1
-    MF_DIFF = 0
-    MF_NULL = -1
 
     def __init__(self, localImg, extImg, rootDirPath):
         self.gReadelfProc = None
@@ -253,7 +254,7 @@ class AFSImageComparator:
     def hashOfCmd(self, cmd):
         """ Execute cmd and return hash of it's output using one of hashlib functions """
         self.gReadelfProc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        ret = hashFromFileOrProc(self.gReadelfProc, hashlib.sha1()) # we can define here which of hashlib.algorithms to use
+        ret = get_hash_from_file_or_process(self.gReadelfProc, hashlib.sha1()) # we can define here which of hashlib.algorithms to use
         err = self.gReadelfProc.stderr.read()
 
         self.gReadelfProc.stdout.close()
@@ -304,87 +305,115 @@ class AFSImageComparator:
         with open(os.devnull, 'w') as dev_null:
             subprocess.call(["unzip", src, "-d", dst], stdout = dev_null)
 
-    def are_apk_same(self, refer_ext, refer_loc):
-        """directly parser for *.apk and *.jar files (unpack to dex)"""
-        root_dir = os.path.dirname(refer_loc)
-        apk_dir=str(self.tmpDirComparison)+str(re.sub('\..*^','',os.path.basename(refer_loc)))+'/'
+    def compare_and_process_java(self, loc_file, ext_file):
+        with open(loc_file) as f_loc:
+            sum_loc = get_hash_from_file_or_process(f_loc, hashlib.sha1())
+        with open(ext_file) as f_ext:
+            sum_ext = get_hash_from_file_or_process(f_ext, hashlib.sha1())
+
+        if (sum_loc == sum_ext):
+            #print "archives are OK", loc_file
+            return True
+        elif self.compare_aapt_results(loc_file, ext_file):
+            return self.compare_packages_by_contents(loc_file, ext_file)
+        else:
+            return False
+
+    def get_aapt_results(self, package_path):
+        # quoted from: http://elinux.org/Android_aapt
+        # aapt list -a: This is similar to doing the following three commands in sequence:
+        # aapt list <pkg> ; aapt dump resources <pkg> ; aapt dump xmltree <pkg> AndroidManifest.xml.
+        command = ['aapt', 'list', '-a', package_path]
+        try:
+            out, err = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+            if len(err) > 0:
+                print FAIL_COLOR + err + END_COLOR
+            if len(out) == 0:
+                print WARNING_COLOR + 'empty aapt output!' + END_COLOR
+                return out
+
+            # Truncate android:versionName to three main digits, for example: 4.1.2
+            #pattern = '(android:versionName.*?[0-9]\.[0-9]\.[0-9])(.*?)(\")'
+            #m = re.search(pattern, out)
+            #if m is not None:
+            #    out = re.sub(m.group(2), '', out)
+            out = re.sub('(android:versionName.*?[0-9]\.[0-9]\.[0-9])(.*?)(\" \(Raw: \"[0-9]\.[0-9]\.[0-9])(.*?)(\"\))', '\g<1>\g<3>\g<5>', out)
+            # Turn output to list of lines and sort it, because sometimes list are same but order differs
+            outlist = out.splitlines()
+            outlist.sort()
+            return outlist
+        except:
+            return None
+
+    def compare_aapt_results(self, package_path1, package_path2):
+        lineslist1 = self.get_aapt_results(package_path1)
+        lineslist2 = self.get_aapt_results(package_path2)
+        if not lineslist1 or not lineslist2 or (len(lineslist1) == 0):
+            print FAIL_COLOR + 'aapt results are empty!' + END_COLOR
+            return False
+        if len(lineslist1) != len(lineslist2):
+            print FAIL_COLOR + 'aapt results are of different lenghts!', len(lineslist1), len(lineslist2), package_path1, END_COLOR
+            return False
+
+        retval = True
+        for i in range(len(lineslist1)):
+            if lineslist1[i] != lineslist2[i]:
+                retval = False
+                print FAIL_COLOR + 'aapt results have different lines!\n' + lineslist1[i] + '\n' + lineslist2[i] + END_COLOR
+                break
+
+        return retval
+
+    def need_to_skip_line(self, path):
+        '''used to skip directories; and files from skiplist'''
+        if not os.path.isfile(path):
+            return True
+        skiplist = ['AndroidManifest.xml','MANIFEST.MF', 'CERT.RSA', 'CERT.SF']
+        for sk in skiplist:
+            if path.endswith(sk):
+                return True
+        return False
+
+    def compare_packages_by_contents(self, loc_path, ext_path):
+        # get files lists using aapt
+        filelist     = subprocess.Popen(['aapt', 'list', loc_path], stdout=subprocess.PIPE).communicate()[0]
+        filelist_ext = subprocess.Popen(['aapt', 'list', ext_path], stdout=subprocess.PIPE).communicate()[0]
+        filelist     = filelist.splitlines()
+        filelist_ext = filelist_ext.splitlines()
+        filelist.sort()
+        filelist_ext.sort()
+
+        if filelist != filelist_ext:
+            #print FAIL_COLOR + 'file-lists obtained by aapt differ!: ' + loc_path + END_COLOR
+            return False
+
+        apk_dir = str(self.tmpDirComparison) + str(re.sub('\..*^','',os.path.basename(loc_path)))+'/'
         self.del_tmp_dir(apk_dir)
         os.mkdir(apk_dir)
-        locDir = apk_dir+'/loc/'
-        extDir = apk_dir+'/ext/'
-        self.unzip(refer_loc,locDir)
-        self.unzip(refer_ext,extDir)
-        cmp_result = self.compare_manifests(locDir + '/META-INF/MANIFEST.MF', extDir + '/META-INF/MANIFEST.MF')
-        if cmp_result == AFSImageComparator.MF_DIFF :
-            return False
-        elif cmp_result == AFSImageComparator.MF_NULL:
-            #maybe manifests are NULL,thus try to take md5 directly
-            return self.compare_classes(locDir + '/classes.dex', extDir + '/classes.dex')
-        else:
+        locDir = apk_dir + '/loc/'
+        extDir = apk_dir + '/ext/'
+        self.unzip(loc_path, locDir)
+        self.unzip(ext_path, extDir)
+
+        retval = True
+        for i in range(len(filelist)):
+            if not self.need_to_skip_line(locDir+filelist[i]):
+                with open(locDir + filelist[i]) as f1:
+                    sum1 = get_hash_from_file_or_process(f1, hashlib.sha1())
+                with open(extDir + filelist[i]) as f2:
+                    sum2 = get_hash_from_file_or_process(f2, hashlib.sha1())
+                if sum1 != sum2:
+                    retval = False
+                    print FAIL_COLOR + 'checksums differ! ' + locDir + filelist[i] + END_COLOR
+                #else:
+                    #print locDir + filelist[i] + ' checksums same - ok'
+
+        if retval:
             self.del_tmp_dir(apk_dir)
-            return True
+        return retval
 
-    def compare_classes(self,locPath,extPath):
-        if not os.path.isfile(str(locPath)):
-            return False #workaround. We have to discuss how to parse if no classes.dex and manifest.ml is empty
-        else:
-            with open (locPath) as class_loc:
-                class_hash_loc = hashFromFileOrProc(class_loc,hashlib.sha1())
-            with open (extPath) as class_ext:
-                class_hash_ext = hashFromFileOrProc(class_ext,hashlib.sha1())
-            if (class_hash_loc==class_hash_ext):
-                return True
-            else:
-                print '\nManifest is null. classes.dex hashsums are different.'
-                return False
-
-    def parse_manifest(self,pathMF):
-        manifestMF={}
-        with open(pathMF,'r') as fileMF:
-            lineMF = str(fileMF.readline())
-            while (lineMF):
-                lineMF = str(fileMF.readline())
-                if (lineMF.startswith('Name')):
-                    # skipping binary manifests.xml workaround
-                    if (lineMF.endswith('AndroidManifest.xml\r\n')):
-                        continue
-                    lineMF_sha = str(fileMF.readline())
-                    if (lineMF_sha.startswith('SHA1-Digest')):
-                        manifestMF[lineMF[6:]] = lineMF_sha[13:]
-        return manifestMF
-
-    def compare_manifests(self,locPath,extPath):
-        manifest_loc = self.parse_manifest(locPath)
-        manifest_ext = self.parse_manifest(extPath)
-        #maybe manifests are NULL,thus try to take md5 directly
-        if not manifest_loc and not manifest_ext:
-            return AFSImageComparator.MF_NULL
-        for cheking_path in manifest_ext.keys():
-            if not cheking_path in manifest_loc:
-                print ('\nno such path: ' + cheking_path).rstrip()
-                #print 'No such Attribute: '+ FAIL_COLOR +'Different sources, at least '+ END_COLOR, locDir+cheking_path
-                return AFSImageComparator.MF_DIFF
-            if (manifest_ext[cheking_path] == manifest_loc[cheking_path]):
-                pass
-            else:
-                print ('\ndifference in: ' + cheking_path).rstrip()
-                #print FAIL_COLOR +'Different sources hash '+ END_COLOR, locDir+cheking_path
-                return AFSImageComparator.MF_DIFF
-        #print locDir, 'Sources hash ore OK'
-
-    def cmp_and_process_java(self, ext_shared_objects,loc_shared_objects):
-        p_ext = subprocess.Popen(['md5sum',ext_shared_objects], stdout=subprocess.PIPE)
-        out_ext=p_ext.communicate()[0]
-        p_loc = subprocess.Popen(['md5sum',loc_shared_objects], stdout=subprocess.PIPE)
-        out_loc=p_loc.communicate()[0]
-        if (out_ext[:33]==out_loc[:33]):
-            #print "archives are OK"
-            return True
-        else:
-            return self.are_apk_same(ext_shared_objects,loc_shared_objects)
-
-    cmpMetodDict = {"*.so": compare_shared_object, "*.ko": compare_shared_object,
-                    "*.jar": cmp_and_process_java, "*.apk": cmp_and_process_java }
+    compareMethodDictionary = {"*.so": compare_shared_object, "*.ko": compare_shared_object,
+                               "*.jar": compare_and_process_java, "*.apk": compare_and_process_java }
     
     def run(self):
         if (self.localMountpointPath is None) or (self.extMountpointPath is None):
@@ -400,12 +429,19 @@ class AFSImageComparator:
                 print WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
                 missings_list = []
 
-        for extension_pattern in self.cmpMetodDict.keys():
+        aapt_available = True
+        if subprocess.call(['which', 'aapt']) != 0:
+            aapt_available = False
+            del self.compareMethodDictionary['*.jar']
+            del self.compareMethodDictionary['*.apk']
+            print FAIL_COLOR + 'No aapt utility found, so do not compare java files and fail implicitly at the end' + END_COLOR
+
+        for extension_pattern in self.compareMethodDictionary.keys():
             ext_files_list = linux_like_find (self.extMountpointPath, extension_pattern)
 
             for file_wholename in ext_files_list:
                 basename = re.sub(self.extMountpointPath, '/', file_wholename)
-                checkret = self.file_check(basename, self.localMountpointPath, self.extMountpointPath, self.cmpMetodDict[extension_pattern] , missings_list)
+                checkret = self.file_check(basename, self.localMountpointPath, self.extMountpointPath, self.compareMethodDictionary[extension_pattern] , missings_list)
                 if checkret is AFSImageComparator.FILE_SAME:
                     pass
                 elif checkret is AFSImageComparator.FILE_MISS_ALLOWED:
@@ -416,6 +452,9 @@ class AFSImageComparator:
                 elif checkret is AFSImageComparator.FILE_MISS:
                     areImagesSame = False
                     print basename + FAIL_COLOR + " missing!" + END_COLOR
+        if aapt_available is not True:
+            areImagesSame = False   # implicitly set to False
+                                    # java files was not compared without aapt 
         return areImagesSame
 
 def main():
@@ -432,7 +471,6 @@ def main():
     tmp_root = args.tmp_dir
     print 'local_img = ' + args.local_img
     print 'ext_img = ' + args.ext_img
-    #print 'tmp_dir = ' args.tmp_dir
 
     if not (os.path.isfile(local_img) and
         os.path.isfile(ext_img)):
@@ -449,6 +487,7 @@ def main():
         print OK_COLOR + "Images are same" + END_COLOR
         result = 0
     else:
+        print FAIL_COLOR + "Images are different" + END_COLOR
         result = 255
     sys.exit(result)
 
