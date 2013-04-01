@@ -6,6 +6,7 @@ import sys
 import re
 import datetime
 import subprocess
+from subprocess import PIPE
 import argparse
 import hashlib
 import signal
@@ -64,8 +65,8 @@ def get_elf_sections(path):
     """
     sections = []
     cmd = ["readelf", "-S", "-W", path]
-    readelfOutput = str(subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE).communicate())
+    readelfOutput = str(subprocess.Popen(cmd, stdout=PIPE,
+                                              stderr=PIPE).communicate())
     pattern = "(\s[a-zA-Z_\.]*)+(text|data|rodata)([\.:][A-Za-z_\.]*)*\s"
     matches = re.findall(pattern, readelfOutput)
     # Example of element in matches:
@@ -220,6 +221,8 @@ class AFSImageComparator:
                 self.extMountpointPath = self.workDirPath + 'ext_root/'
                 os.mkdir(self.localMountpointPath)
                 os.mkdir(self.extMountpointPath)
+                print self.localMountpointPath
+                print self.extMountpointPath
                 mount_loop(localImg, self.localMountpointPath)
                 mount_loop(extImg, self.extMountpointPath)
         except OSError:
@@ -241,7 +244,7 @@ class AFSImageComparator:
     # Deprecated method
     def md5_hashlib(self, cmd):
         """ Execute cmd and return MD5 of it's output using hashlib.md5 for communicate() result """
-        self.gReadelfProc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.gReadelfProc = subprocess.Popen(cmd, stdout=PIPE, stderr=PIPE)
         pout, perr = self.gReadelfProc.communicate()
         ret = hashlib.md5(pout).hexdigest()
         if (pout == ''):
@@ -253,7 +256,7 @@ class AFSImageComparator:
 
     def hashOfCmd(self, cmd):
         """ Execute cmd and return hash of it's output using one of hashlib functions """
-        self.gReadelfProc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.gReadelfProc = subprocess.Popen(cmd, stdout=PIPE, stderr=PIPE)
         ret = get_hash_from_file_or_process(self.gReadelfProc, hashlib.sha1()) # we can define here which of hashlib.algorithms to use
         err = self.gReadelfProc.stderr.read()
 
@@ -325,7 +328,7 @@ class AFSImageComparator:
         # aapt list <pkg> ; aapt dump resources <pkg> ; aapt dump xmltree <pkg> AndroidManifest.xml.
         command = ['aapt', 'list', '-a', package_path]
         try:
-            out, err = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+            out, err = subprocess.Popen(command, stdout=PIPE, stderr=PIPE).communicate()
             if len(err) > 0:
                 print FAIL_COLOR + err + END_COLOR
             if len(out) == 0:
@@ -376,8 +379,8 @@ class AFSImageComparator:
 
     def compare_packages_by_contents(self, loc_path, ext_path):
         # get files lists using aapt
-        filelist     = subprocess.Popen(['aapt', 'list', loc_path], stdout=subprocess.PIPE).communicate()[0]
-        filelist_ext = subprocess.Popen(['aapt', 'list', ext_path], stdout=subprocess.PIPE).communicate()[0]
+        filelist     = subprocess.Popen(['aapt', 'list', loc_path], stdout=PIPE).communicate()[0]
+        filelist_ext = subprocess.Popen(['aapt', 'list', ext_path], stdout=PIPE).communicate()[0]
         filelist     = filelist.splitlines()
         filelist_ext = filelist_ext.splitlines()
         filelist.sort()
@@ -432,7 +435,7 @@ class AFSImageComparator:
                 missings_list = []
 
         aapt_available = True
-        if subprocess.call(['which', 'aapt']) != 0:
+        if subprocess.call(['which', 'aapt'], stdout=PIPE, stderr=PIPE) != 0:
             aapt_available = False
             del self.compareMethodDictionary['*.jar']
             del self.compareMethodDictionary['*.apk']
@@ -482,8 +485,6 @@ def main():
     local_img = args.local_img
     ext_img = args.ext_img
     tmp_root = args.tmp_dir
-    print 'local_img = ' + args.local_img
-    print 'ext_img = ' + args.ext_img
 
     if not (os.path.isfile(local_img) and
         os.path.isfile(ext_img)):

@@ -39,10 +39,10 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
         - cleaning workdir and tmp dirs after script run
     """
     @staticmethod
-    def __are_images_mounted(img1, img2):
+    def __are_images_mounted(mount_point1, mount_point2):
         res = False
         mounts = str(Popen(["mount"], stdout=PIPE).communicate()[0])
-        if (img1 in mounts) or (img2 in mounts):
+        if (mount_point1 in mounts) or (mount_point2 in mounts):
             res = True
         return res
 
@@ -57,24 +57,29 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
         img2 = realpath(imgdir + "same_in_allowed_ext.img")
 
         def run_compare_packages_script():
-            args = ["python", "check_files.py", img1, img2]
+            args = ["python", "-u", "check_files.py", img1, img2]
             process = Popen(args, stdout=PIPE)
             return process
 
-        def umount_images():
-            args = ["sudo", "umount", img1]
-            Popen(args)
-            args = ["sudo", "umount", img2]
+        def umount(mount_point):
+            args = ["sudo", "umount", mount_point]
             Popen(args)
 
         def check_signal_handling(sig):
             process = run_compare_packages_script()
-            time.sleep(0.1)     # let script have time to mount loops
+            img_workdir1 = str(process.stdout.readline())[:-2]
+            img_workdir2 = str(process.stdout.readline())[:-2]
+            delay = 0
+            while not(self.__are_images_mounted(img_workdir1, img_workdir2) or delay>=2):
+                time.sleep(delay)
+                delay += 0.1
             process.send_signal(sig)
-            time.sleep(0.2)     # let script have time to umount loops after catching signal
-            areMounted = self.__are_images_mounted(img1, img2)
+            time.sleep(0.3)     # let script have time to umount loops after catching signal
+            areMounted = self.__are_images_mounted(img_workdir1, img_workdir2)
+            self.assertFalse(delay>=2)
             if areMounted:
-                umount_images()
+                umount(img_workdir1)
+                umount(img_workdir2)
             self.assertFalse(areMounted)
 
         signalsToCheck = [signal.SIGINT, signal.SIGTERM]
@@ -87,22 +92,22 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
         Creates tester object and checks if images are mounted on loop.
         Checks if images are umounted and workDir is removed after deletion.
         """
-        img_loc = "unit_test_files/img_.same_not_allowed/same_not_in_allowed_loc.img"
-        img_ext = "unit_test_files/img_.same_not_allowed/same_not_in_allowed_ext.img"
-        tester = AFSImageComparator(img_loc, img_ext, "")
-
+        tester = AFSImageComparator("unit_test_files/img_.same_not_allowed/same_not_in_allowed_loc.img",
+                                    "unit_test_files/img_.same_not_allowed/same_not_in_allowed_ext.img",
+                                    "")
         res = os.path.isdir(tester.localMountpointPath)
         self.assertTrue(res)
         res = os.path.isdir(tester.extMountpointPath)
         self.assertTrue(res)
-
-        res = self.__are_images_mounted(img_loc, img_ext)
+        img_workdir1 = tester.localMountpointPath
+        img_workdir2 = tester.extMountpointPath
+        res = self.__are_images_mounted(img_workdir1[:-1], img_workdir2[:-1])
         self.assertTrue(res)
         tester_WorkDir = tester.workDirPath
         del tester
         res = os.path.isdir(tester_WorkDir)
         self.assertFalse(res)
-        res = self.__are_images_mounted(img_loc, img_ext)
+        res = self.__are_images_mounted(img_workdir1[:-1], img_workdir2[:-1])
         self.assertFalse(res)
 
     def test_lots_of_dummy_AFSImageComparator_instances(self):
