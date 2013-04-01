@@ -392,9 +392,10 @@ class AFSImageComparator:
             return False
         areImagesSame=True
         try:
+            #Assume there must be such 'allowed-missing-files' file in the same dir.
+            script_parent_dir = os.path.dirname(sys.argv[0])
             with open('allowed-missing-files') as missings_file:
                 missings_list = missings_file.read().splitlines()
-        #        print missings_list
         except IOError:
                 print WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
                 missings_list = []
