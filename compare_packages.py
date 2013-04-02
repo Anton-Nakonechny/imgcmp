@@ -93,7 +93,6 @@ def main():
     
     systemComparator = AFSImageComparator(internalSysImageRetlist[0], externalSysImageRetlist[0], workPath)
     
-    systemComparator.run()
     OK = systemComparator.run()
     del systemComparator
     if OK:
