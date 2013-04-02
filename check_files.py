@@ -414,6 +414,8 @@ class AFSImageComparator:
 
     compareMethodDictionary = {"*.so": compare_shared_object, "*.ko": compare_shared_object,
                                "*.jar": compare_and_process_java, "*.apk": compare_and_process_java }
+    totalCountDictionary = {"*.so": 0, "*.ko": 0, "*.jar": 0, "*.apk": 0}
+    differentCountDictionary = {"*.so": 0, "*.ko": 0, "*.jar": 0, "*.apk": 0}
     
     def run(self):
         if (self.localMountpointPath is None) or (self.extMountpointPath is None):
@@ -438,6 +440,7 @@ class AFSImageComparator:
 
         for extension_pattern in self.compareMethodDictionary.keys():
             ext_files_list = linux_like_find (self.extMountpointPath, extension_pattern)
+            self.totalCountDictionary[extension_pattern] = len(ext_files_list)
 
             for file_wholename in ext_files_list:
                 basename = re.sub(self.extMountpointPath, '/', file_wholename)
@@ -448,13 +451,22 @@ class AFSImageComparator:
                     pass
                 elif checkret is AFSImageComparator.FILE_DIFF:
                     areImagesSame = False
+                    self.differentCountDictionary[extension_pattern] += 1
                     print basename + FAIL_COLOR + " doesn't match!" + END_COLOR
                 elif checkret is AFSImageComparator.FILE_MISS:
                     areImagesSame = False
+                    self.differentCountDictionary[extension_pattern] += 1
                     print basename + FAIL_COLOR + " missing!" + END_COLOR
+
         if aapt_available is not True:
             areImagesSame = False   # implicitly set to False
-                                    # java files was not compared without aapt 
+                                    # java files were not compared without aapt
+
+        if areImagesSame is not True:
+            print '### Summary ###'
+            for key in self.totalCountDictionary.keys():
+                print '{0:>3} {1:<5} files differ (compared: {2:>3})'.format(self.differentCountDictionary[key], key, self.totalCountDictionary[key])
+
         return areImagesSame
 
 def main():
