@@ -8,6 +8,8 @@ import tarfile
 import zipfile
 import re
 import datetime
+import signal
+import shutil
 
 from operator import itemgetter
 from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, linux_like_find
@@ -48,7 +50,29 @@ def findNewestBuild(folder, template):
     #print FoundList
     return FoundList[0][0]
 
+def cleanup():
+    print "Making extracted sysImages and workDir cleanup\nrm -rf", workPath
+    if workPath and os.path.isdir(workPath):
+        shutil.rmtree(workPath)
+
+def signal_handler(signum, frame):
+    global systemImageComparator
+    try:
+        if systemImageComparator:
+            del systemImageComparator
+    #Print termination message instead off falling to NameError exception
+    #for non-existing object in corner case of early script termination.
+    except NameError:
+        pass
+    exitstr = 'Exiting on signal: ' + str(signum)
+    cleanup()
+    sys.exit(exitstr)
+
 def main():
+    global systemImageComparator
+    signal.signal(signal.SIGINT,  signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--internal_package", "-i", help="path to fresh build", required=True)
     group = parser.add_mutually_exclusive_group(required=True)
@@ -59,7 +83,7 @@ def main():
     args = parser.parse_args()
 
     nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
-   
+
     if not (os.path.isfile(args.internal_package) and os.access(args.internal_package, os.R_OK)):
         print FAIL_COLOR + "Problems with reading internal package" + END_COLOR + '\n'
         parser.print_help()
@@ -80,28 +104,31 @@ def main():
         tmpDir = args.tmp_dir if args.tmp_dir.endswith('/') else args.tmp_dir + '/'
     else:
         tmpDir = '/tmp/'
-    workPath =  tmpDir + nowString + '/'
+    global workPath;
+    workPath = tmpDir + nowString + '/'
     os.mkdir(workPath)
     internalSysImageRetlist = extractSystemImage(args.internal_package, workPath)
     if internalSysImageRetlist is None:
         print FAIL_COLOR + 'Failed to extract internal sysImage' + END_COLOR + "\nfrom " + args.internal_package
+        cleanup()
         sys.exit(1)
     externalSysImageRetlist = extractSystemImage(externalPackage, workPath)
     if externalSysImageRetlist is None:
         print FAIL_COLOR + 'Failed to extract external sysImage' + END_COLOR + "\nfrom " + externalPackage
+        cleanup()
         sys.exit(1)
-    
-    systemComparator = AFSImageComparator(internalSysImageRetlist[0], externalSysImageRetlist[0], workPath)
-    
-    OK = systemComparator.run()
-    del systemComparator
+
+    systemImageComparator = AFSImageComparator(internalSysImageRetlist[0], externalSysImageRetlist[0], workPath)
+    OK = systemImageComparator.run()
+    del systemImageComparator
+
     if OK:
         print OK_COLOR + "SysImages are same" + END_COLOR
         result = 0
     else:
         result = 255
 
-    print "You might want to cleanup\n    rm -rf " + workPath
+    cleanup()
     sys.exit(result)
 
 if __name__ == '__main__':

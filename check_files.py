@@ -143,8 +143,8 @@ def signal_handler(signum, frame):
     try:
         if tester:
             del tester
-#Print termination message instead off falling to NameError exception
-#for non-existing object in corner case of early script termination.
+    #Print termination message instead off falling to NameError exception
+    #for non-existing object in corner case of early script termination.
     except NameError:
         pass
     exitstr = 'Exiting on signal: ' + str(signum)
