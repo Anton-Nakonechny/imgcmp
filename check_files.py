@@ -463,9 +463,10 @@ class AFSImageComparator:
                                     # java files were not compared without aapt
 
         if areImagesSame is not True:
-            print '### Summary ###'
+            print '\n----------------- Summary -----------------'
             for key in self.totalCountDictionary.keys():
                 print '{0:>3} {1:<5} files differ (compared: {2:>3})'.format(self.differentCountDictionary[key], key, self.totalCountDictionary[key])
+            print '-------------------------------------------\n'
 
         return areImagesSame
 
