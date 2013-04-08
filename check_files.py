@@ -468,7 +468,20 @@ class AFSImageComparator:
         if areImagesSame is not True:
             print '\n----------------- Summary -----------------'
             for key in self.totalCountDictionary.keys():
-                print '{0:>3} {1:<5} files differ (compared: {2:>3})'.format(self.differentCountDictionary[key], key, self.totalCountDictionary[key])
+                if self.totalCountDictionary[key] > 0:
+                    group_perc = self.differentCountDictionary[key] / float(self.totalCountDictionary[key]) * 100
+                else:
+                    group_perc = 0
+                print '{0:>3} {1:<5} files differ:{2:>5}% ({0}/{3})'.format(self.differentCountDictionary[key],
+                                                                            key, round(group_perc, 1),
+                                                                            self.totalCountDictionary[key])
+            if sum(self.totalCountDictionary.values()) > 0:
+                total_perc = sum(self.differentCountDictionary.values()) / float(sum(self.totalCountDictionary.values())) * 100
+            else:
+                total_perc = 0
+            print '\n Total difference:{0:>5}% ({1}/{2})'.format(round(total_perc, 1),
+                                                                 sum(self.differentCountDictionary.values()),
+                                                                 sum(self.totalCountDictionary.values()))
             print '-------------------------------------------\n'
 
         return areImagesSame
