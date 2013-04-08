@@ -80,7 +80,8 @@ def determine_missing_elf_sections(filepath, sections1, sections2):
     retval = True
     missed = sections2.difference(sections1) # sections2 - sections1
     if len(missed) != 0:
-        print "{0} has missing sections: {1}".format(filepath, ", ".join(missed))
+        if VERBOSE:
+            print "{0} has missing sections: {1}".format(filepath, ", ".join(missed))
         retval = False
     return retval
 
@@ -90,14 +91,17 @@ def get_hash_from_file_or_process(inpobj, hashfunc, blocksize=65356):
     if typename == 'file': buf = inpobj.read(blocksize)
     elif typename == 'Popen': buf = inpobj.stdout.read(blocksize)
     else:
-        print FAIL_COLOR + 'hashFromFile(): Wrong input object! need file or Popen' + END_COLOR
+        if VERBOSE:
+            print FAIL_COLOR + 'hashFromFile(): Wrong input object! need file or Popen' + END_COLOR
         return
 
     if len(buf) == 0:
         if typename == 'file':
-            print WARNING_COLOR + 'get_hash_from_file_or_process(): empty input!', inpobj.name + END_COLOR
+            if VERBOSE:
+                print WARNING_COLOR + 'get_hash_from_file_or_process(): empty input!', inpobj.name + END_COLOR
         else:
-            print WARNING_COLOR + 'get_hash_from_file_or_process(): empty input (Popen object)!' + END_COLOR
+            if VERBOSE:
+                print WARNING_COLOR + 'get_hash_from_file_or_process(): empty input (Popen object)!' + END_COLOR
 
     while len(buf) > 0:
         hashfunc.update(buf)
@@ -136,11 +140,13 @@ def get_hash_from_file_or_process(inpobj, hashfunc, blocksize=65356):
 
 def mount_loop(AbsImgPath, MountPoint):
     cmd = ['sudo','mount', '-o', 'loop,ro', AbsImgPath, MountPoint]
-    print ' '.join(cmd)
+    if VERBOSE:
+        print ' '.join(cmd)
     return subprocess.check_call(cmd, shell=False)
 
 def signal_handler(signum, frame):
     global tester
+    global VERBOSE
     try:
         if tester:
             del tester
@@ -185,7 +191,8 @@ class AFSImageComparator:
             self.umount_loop(self.extMountpointPath)
         if self.workDirPath:
             shutil.rmtree(self.workDirPath)
-            print "removed " + self.workDirPath
+            if VERBOSE:
+                print "removed " + self.workDirPath
 
     def prepare_work_dir(self, localImg, extImg, rootDirPath):
         if (rootDirPath is None) or (not rootDirPath):
@@ -221,8 +228,9 @@ class AFSImageComparator:
                 self.extMountpointPath = self.workDirPath + 'ext_root/'
                 os.mkdir(self.localMountpointPath)
                 os.mkdir(self.extMountpointPath)
-                print self.localMountpointPath
-                print self.extMountpointPath
+                if VERBOSE:
+                    print self.localMountpointPath
+                    print self.extMountpointPath
                 mount_loop(localImg, self.localMountpointPath)
                 mount_loop(extImg, self.extMountpointPath)
         except OSError:
@@ -248,9 +256,11 @@ class AFSImageComparator:
         pout, perr = self.gReadelfProc.communicate()
         ret = hashlib.md5(pout).hexdigest()
         if (pout == ''):
-            print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" empty stdout' + END_COLOR
+            if VERBOSE:
+                print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" empty stdout' + END_COLOR
         if (perr != ''):
-            print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
+            if VERBOSE:
+                print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
         #print 'md5: ' + ret
         return ret
 
@@ -264,7 +274,8 @@ class AFSImageComparator:
         self.gReadelfProc.stderr.close()
 
         if len(err) > 0:
-            print WARNING_COLOR + ' '.join(cmd) + ' : ' + err + END_COLOR
+            if VERBOSE:
+                print WARNING_COLOR + ' '.join(cmd) + ' : ' + err + END_COLOR
 
         return ret
 
@@ -292,7 +303,8 @@ class AFSImageComparator:
             sum1 = self.hashOfCmd(cmd1)
             sum2 = self.hashOfCmd(cmd2)
             if (sum1 != sum2):
-                print "{0}{1} has different {2} ELF section{3}".format(FAIL_COLOR, file1, section, END_COLOR)
+                if VERBOSE:
+                    print "{0}{1} has different {2} ELF section{3}".format(FAIL_COLOR, file1, section, END_COLOR)
                 result = False
         return result
 
@@ -302,7 +314,8 @@ class AFSImageComparator:
 
     def unzip (self,src,dst):
         if not os.path.isfile(src):
-            print 'no such file: '+src
+            if VERBOSE:
+                print "no such file: {0}".format(src)
             return
         os.mkdir(dst)
         with open(os.devnull, 'w') as dev_null:
@@ -330,9 +343,11 @@ class AFSImageComparator:
         try:
             out, err = subprocess.Popen(command, stdout=PIPE, stderr=PIPE).communicate()
             if len(err) > 0:
-                print FAIL_COLOR + err + END_COLOR
+                if VERBOSE:
+                    print "{0}{1}{2}".format(FAIL_COLOR, err, END_COLOR)
             if len(out) == 0:
-                print WARNING_COLOR + 'empty aapt output!' + END_COLOR
+                if VERBOSE:
+                    print "{0}empty aapt output!{1}".format(WARNING_COLOR, END_COLOR)
                 return out
 
             # Truncate android:versionName to three main digits, for example: 4.1.2
@@ -352,17 +367,20 @@ class AFSImageComparator:
         lineslist1 = self.get_aapt_results(package_path1)
         lineslist2 = self.get_aapt_results(package_path2)
         if not lineslist1 or not lineslist2 or (len(lineslist1) == 0):
-            print FAIL_COLOR + 'aapt results are empty!' + END_COLOR
+            if VERBOSE:
+                print "{0}aapt results are empty!{1}".format(FAIL_COLOR, END_COLOR)
             return False
         if len(lineslist1) != len(lineslist2):
-            print FAIL_COLOR + 'aapt results are of different lenghts!', len(lineslist1), len(lineslist2), package_path1, END_COLOR
+            if VERBOSE:
+                print "{0}aapt results are of different lenghts!{1}{2}{3}".format(FAIL_COLOR, len(lineslist1), package_path1, END_COLOR)
             return False
 
         retval = True
         for i in range(len(lineslist1)):
             if lineslist1[i] != lineslist2[i]:
                 retval = False
-                print FAIL_COLOR + 'aapt results have different lines!\n' + lineslist1[i] + '\n' + lineslist2[i] + END_COLOR
+                if VERBOSE:
+                    print "{0}aapt results have different lines!\n{1}\n{2}{3}".format(FAIL_COLOR, lineslist1[i], lineslist2[i], END_COLOR)
                 break
 
         return retval
@@ -407,7 +425,8 @@ class AFSImageComparator:
                     sum2 = get_hash_from_file_or_process(f2, hashlib.sha1())
                 if sum1 != sum2:
                     retval = False
-                    print FAIL_COLOR + 'checksums differ! ' + locDir + filelist[i] + END_COLOR
+                    if VERBOSE:
+                        print "{0}checksums differ! {1}{2}{3}".format(FAIL_COLOR, locDir, filelist[i], END_COLOR)
                 #else:
                     #print locDir + filelist[i] + ' checksums same - ok'
 
@@ -422,7 +441,8 @@ class AFSImageComparator:
     
     def run(self):
         if (self.localMountpointPath is None) or (self.extMountpointPath is None):
-            print FAIL_COLOR + "Cannot run dummy AFSImageComparator!" + END_COLOR + "\nInstances without .img files are for unit tests only."
+            if VERBOSE:
+                print FAIL_COLOR + "Cannot run dummy AFSImageComparator!" + END_COLOR + "\nInstances without .img files are for unit tests only."
             return False
         areImagesSame=True
         try:
@@ -431,7 +451,8 @@ class AFSImageComparator:
             with open('allowed-missing-files') as missings_file:
                 missings_list = missings_file.read().splitlines()
         except IOError:
-                print WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
+                if VERBOSE:
+                    print WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
                 missings_list = []
 
         aapt_available = True
@@ -439,7 +460,8 @@ class AFSImageComparator:
             aapt_available = False
             del self.compareMethodDictionary['*.jar']
             del self.compareMethodDictionary['*.apk']
-            print FAIL_COLOR + 'No aapt utility found, so do not compare java files and fail implicitly at the end' + END_COLOR
+            if VERBOSE:
+                print FAIL_COLOR + 'No aapt utility found, so do not compare java files and fail implicitly at the end' + END_COLOR
 
         for extension_pattern in self.compareMethodDictionary.keys():
             ext_files_list = linux_like_find (self.extMountpointPath, extension_pattern)
@@ -455,46 +477,53 @@ class AFSImageComparator:
                 elif checkret is AFSImageComparator.FILE_DIFF:
                     areImagesSame = False
                     self.differentCountDictionary[extension_pattern] += 1
-                    print basename + FAIL_COLOR + " doesn't match!" + END_COLOR
+                    if VERBOSE:
+                        print basename + FAIL_COLOR + " doesn't match!" + END_COLOR
                 elif checkret is AFSImageComparator.FILE_MISS:
                     areImagesSame = False
                     self.differentCountDictionary[extension_pattern] += 1
-                    print basename + FAIL_COLOR + " missing!" + END_COLOR
+                    if VERBOSE:
+                        print basename + FAIL_COLOR + " missing!" + END_COLOR
 
         if aapt_available is not True:
             areImagesSame = False   # implicitly set to False
                                     # java files were not compared without aapt
 
-        if areImagesSame is not True:
-            print '\n----------------- Summary -----------------'
-            for key in self.totalCountDictionary.keys():
-                if self.totalCountDictionary[key] > 0:
-                    group_perc = self.differentCountDictionary[key] / float(self.totalCountDictionary[key]) * 100
-                else:
-                    group_perc = 0
-                print '{0:>3} {1:<5} files differ:{2:>5}% ({0}/{3})'.format(self.differentCountDictionary[key],
-                                                                            key, round(group_perc, 1),
-                                                                            self.totalCountDictionary[key])
-            if sum(self.totalCountDictionary.values()) > 0:
-                total_perc = sum(self.differentCountDictionary.values()) / float(sum(self.totalCountDictionary.values())) * 100
+        print '\n----------------- Summary -----------------'
+        for key in self.totalCountDictionary.keys():
+            if self.totalCountDictionary[key] > 0:
+                group_perc = self.differentCountDictionary[key] / float(self.totalCountDictionary[key]) * 100
             else:
-                total_perc = 0
-            print '\n Total difference:{0:>5}% ({1}/{2})'.format(round(total_perc, 1),
-                                                                 sum(self.differentCountDictionary.values()),
-                                                                 sum(self.totalCountDictionary.values()))
-            print '-------------------------------------------\n'
+                group_perc = 0
+            print '{0:>3} {1:<5} files differ:{2:>5}% ({0}/{3})'.format(self.differentCountDictionary[key],
+                                                                        key, round(group_perc, 1),
+                                                                        self.totalCountDictionary[key])
+        if sum(self.totalCountDictionary.values()) > 0:
+            total_perc = sum(self.differentCountDictionary.values()) / float(sum(self.totalCountDictionary.values())) * 100
+        else:
+            total_perc = 0
+        print '\n Total difference:{0:>5}% ({1}/{2})'.format(round(total_perc, 1),
+                                                             sum(self.differentCountDictionary.values()),
+                                                             sum(self.totalCountDictionary.values()))
+        print '-------------------------------------------\n'
 
         return areImagesSame
 
 def main():
     global tester
+    global VERBOSE
     signal.signal(signal.SIGINT,  signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     parser = argparse.ArgumentParser()
     parser.add_argument("local_img", help="path to local")
     parser.add_argument("ext_img", help="path to ext")
     parser.add_argument("--tmp-dir", help="path to tmp-dir")
+    parser.add_argument("-v", "--verbose", help="verbose output", action="store_true")#, default=False)
     args = parser.parse_args()
+    if args.verbose:
+        VERBOSE = True
+    else:
+        VERBOSE = False
     local_img = args.local_img
     ext_img = args.ext_img
     tmp_root = args.tmp_dir
@@ -502,8 +531,9 @@ def main():
     if not (os.path.isfile(local_img) and
         os.path.isfile(ext_img)):
         print FAIL_COLOR + "Toubles while accessing system images." + END_COLOR
-        print local_img
-        print ext_img
+        if VERBOSE:
+            print local_img
+            print ext_img
         parser.print_help()
         sys.exit(1)
 
