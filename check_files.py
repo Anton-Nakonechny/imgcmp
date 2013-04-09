@@ -13,6 +13,9 @@ import signal
 import getpass
 import shutil
 
+global VERBOSE
+VERBOSE = False
+
 def DFS(root, skip_symlinks = 1):
     """Depth first search traversal of directory structure."""
     stack = [root]
@@ -518,7 +521,7 @@ def main():
     parser.add_argument("local_img", help="path to local")
     parser.add_argument("ext_img", help="path to ext")
     parser.add_argument("--tmp-dir", help="path to tmp-dir")
-    parser.add_argument("-v", "--verbose", help="verbose output", action="store_true")#, default=False)
+    parser.add_argument("-v", "--verbose", help="verbose output", action="store_true")
     args = parser.parse_args()
     if args.verbose:
         VERBOSE = True

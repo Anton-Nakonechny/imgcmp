@@ -12,7 +12,7 @@ import signal
 import shutil
 
 from operator import itemgetter
-from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, linux_like_find
+from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, linux_like_find, VERBOSE
 
 def extractSystemImage(archive, folder):
     try:

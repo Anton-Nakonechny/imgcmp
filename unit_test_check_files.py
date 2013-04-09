@@ -29,7 +29,7 @@ import signal
 
 from subprocess import Popen, PIPE
 
-from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, realpath, get_elf_sections, determine_missing_elf_sections
+from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, realpath, get_elf_sections, determine_missing_elf_sections, VERBOSE
 
 class GeneralScriptBehaviourTestSuite(unittest.TestCase):
     """
@@ -57,7 +57,7 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
         img2 = realpath(imgdir + "same_in_allowed_ext.img")
 
         def run_compare_packages_script():
-            args = ["python", "-u", "check_files.py", img1, img2]
+            args = ["python", "-u", "check_files.py", img1, img2, "-v"]
             process = Popen(args, stdout=PIPE)
             return process
 
@@ -67,8 +67,8 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
 
         def check_signal_handling(sig):
             process = run_compare_packages_script()
-            img_workdir1 = str(process.stdout.readline())[:-2]
-            img_workdir2 = str(process.stdout.readline())[:-2]
+            img_workdir1 = str(process.stdout.readline())[27:-2]
+            img_workdir2 = str(process.stdout.readline())[27:-2]
             delay = 0
             while not(self.__are_images_mounted(img_workdir1, img_workdir2) or delay>=2):
                 time.sleep(delay)
