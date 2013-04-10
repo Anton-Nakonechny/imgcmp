@@ -26,6 +26,7 @@ import unittest
 import os
 import time
 import signal
+import datetime
 
 from subprocess import Popen, PIPE
 
@@ -67,6 +68,10 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
 
         def check_signal_handling(sig):
             process = run_compare_packages_script()
+#TODO: the next line must be reworked to more definite way of mountpoint identification.
+#at least launched at 23:59:55 will fail the test
+            while not(str(datetime.datetime.today())[:10] in process.stdout.readline()):
+                continue
             img_workdir1 = str(process.stdout.readline())[27:-2]
             img_workdir2 = str(process.stdout.readline())[27:-2]
             delay = 0

@@ -538,6 +538,7 @@ class AFSImageComparator(object):
         return areImagesSame
 
 def main():
+    print 'Android image comparator v1.0 - GlobalLogic Ukraine, 2013\n'
     global tester
     signal.signal(signal.SIGINT,  signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)

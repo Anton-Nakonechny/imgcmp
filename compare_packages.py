@@ -71,6 +71,7 @@ def signal_handler(signum, frame):
     sys.exit(exitstr)
 
 def main():
+    print 'Android burn package comparator v1.0 - GlobalLogic Ukraine, 2013\n'
     global systemImageComparator
     signal.signal(signal.SIGINT,  signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
