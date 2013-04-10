@@ -13,9 +13,6 @@ import signal
 import getpass
 import shutil
 
-global VERBOSE
-VERBOSE = False
-
 def DFS(root, skip_symlinks = 1):
     """Depth first search traversal of directory structure."""
     stack = [root]
@@ -83,7 +80,7 @@ def determine_missing_elf_sections(filepath, sections1, sections2):
     retval = True
     missed = sections2.difference(sections1) # sections2 - sections1
     if len(missed) != 0:
-        if VERBOSE:
+        if AFSImageComparator.VERBOSE:
             print "{0} {1} has missing sections: {2}".format(datetime.datetime.now(), filepath, ", ".join(missed))
         retval = False
     return retval
@@ -94,16 +91,16 @@ def get_hash_from_file_or_process(inpobj, hashfunc, blocksize=65356):
     if typename == 'file': buf = inpobj.read(blocksize)
     elif typename == 'Popen': buf = inpobj.stdout.read(blocksize)
     else:
-        if VERBOSE:
+        if AFSImageComparator.VERBOSE:
             print "{0} {1}hashFromFile(): Wrong input object! need file or Popen{2}".format(datetime.datetime.now(), FAIL_COLOR, END_COLOR)
         return
 
     if len(buf) == 0:
         if typename == 'file':
-            if VERBOSE:
+            if AFSImageComparator.VERBOSE:
                 print "{0} {1}hashFromFile(): Wrong input object! need file or Popen {2}{3}".format(datetime.datetime.now(), WARNING_COLOR, inpobj.name, END_COLOR)
         else:
-            if VERBOSE:
+            if AFSImageComparator.VERBOSE:
                 print "{0} {1}1get_hash_from_file_or_process(): empty input (Popen object)!{2}".format(datetime.datetime.now(), WARNING_COLOR, END_COLOR)
 
     while len(buf) > 0:
@@ -143,13 +140,12 @@ def get_hash_from_file_or_process(inpobj, hashfunc, blocksize=65356):
 
 def mount_loop(AbsImgPath, MountPoint):
     cmd = ['sudo','mount', '-o', 'loop,ro', AbsImgPath, MountPoint]
-    if VERBOSE:
+    if AFSImageComparator.VERBOSE:
         print datetime.datetime.now(), ' '.join(cmd)
     return subprocess.check_call(cmd, shell=False)
 
 def signal_handler(signum, frame):
     global tester
-    global VERBOSE
     try:
         if tester:
             del tester
@@ -174,7 +170,7 @@ else:
     END_COLOR    = ''
 
 class AFSImageComparator:
-
+    VERBOSE = True
     # file_check() result codes
     FILE_SAME = 0
     FILE_DIFF = 1
@@ -194,7 +190,7 @@ class AFSImageComparator:
             self.umount_loop(self.extMountpointPath)
         if self.workDirPath:
             shutil.rmtree(self.workDirPath)
-            if VERBOSE:
+            if AFSImageComparator.VERBOSE:
                 print datetime.datetime.now(), "removed " + self.workDirPath
 
     def prepare_work_dir(self, localImg, extImg, rootDirPath):
@@ -231,7 +227,7 @@ class AFSImageComparator:
                 self.extMountpointPath = self.workDirPath + 'ext_root/'
                 os.mkdir(self.localMountpointPath)
                 os.mkdir(self.extMountpointPath)
-                if VERBOSE:
+                if AFSImageComparator.VERBOSE:
                     print datetime.datetime.now(), self.localMountpointPath
                     print datetime.datetime.now(), self.extMountpointPath
                 mount_loop(localImg, self.localMountpointPath)
@@ -259,10 +255,10 @@ class AFSImageComparator:
         pout, perr = self.gReadelfProc.communicate()
         ret = hashlib.md5(pout).hexdigest()
         if (pout == ''):
-            if VERBOSE:
+            if AFSImageComparator.VERBOSE:
                 print datetime.datetime.now(), WARNING_COLOR + '\"' + ' '.join(cmd) + '\" empty stdout' + END_COLOR
         if (perr != ''):
-            if VERBOSE:
+            if AFSImageComparator.VERBOSE:
                 print datetime.datetime.now(), WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
         #print 'md5: ' + ret
         return ret
@@ -277,7 +273,7 @@ class AFSImageComparator:
         self.gReadelfProc.stderr.close()
 
         if len(err) > 0:
-            if VERBOSE:
+            if AFSImageComparator.VERBOSE:
                 print datetime.datetime.now(), WARNING_COLOR + ' '.join(cmd) + ' : ' + err + END_COLOR
 
         return ret
@@ -306,7 +302,7 @@ class AFSImageComparator:
             sum1 = self.hashOfCmd(cmd1)
             sum2 = self.hashOfCmd(cmd2)
             if (sum1 != sum2):
-                if VERBOSE:
+                if AFSImageComparator.VERBOSE:
                     print "{0} {1}{2} has different {3} ELF section{4}".format(datetime.datetime.now(), FAIL_COLOR, file1, section, END_COLOR)
                 result = False
         return result
@@ -317,7 +313,7 @@ class AFSImageComparator:
 
     def unzip (self,src,dst):
         if not os.path.isfile(src):
-            if VERBOSE:
+            if AFSImageComparator.VERBOSE:
                 print datetime.datetime.now(), "no such file: {0}".format(src)
             return
         os.mkdir(dst)
@@ -346,10 +342,10 @@ class AFSImageComparator:
         try:
             out, err = subprocess.Popen(command, stdout=PIPE, stderr=PIPE).communicate()
             if len(err) > 0:
-                if VERBOSE:
+                if AFSImageComparator.VERBOSE:
                     print "{0} {1}{2}{4}".format(datetime.datetime.now(), FAIL_COLOR, err, END_COLOR)
             if len(out) == 0:
-                if VERBOSE:
+                if AFSImageComparator.VERBOSE:
                     print "{0} {1}empty aapt output!{2}".format(datetime.datetime.now(), WARNING_COLOR, END_COLOR)
                 return out
 
@@ -370,11 +366,11 @@ class AFSImageComparator:
         lineslist1 = self.get_aapt_results(package_path1)
         lineslist2 = self.get_aapt_results(package_path2)
         if not lineslist1 or not lineslist2 or (len(lineslist1) == 0):
-            if VERBOSE:
+            if AFSImageComparator.VERBOSE:
                 print "{0} {1}aapt results are empty!{2}".format(datetime.datetime.now(), FAIL_COLOR, END_COLOR)
             return False
         if len(lineslist1) != len(lineslist2):
-            if VERBOSE:
+            if AFSImageComparator.VERBOSE:
                 print "{0} {1}aapt results are of different lenghts!{2}{3}{4}".format(datetime.datetime.now(), FAIL_COLOR, len(lineslist1), package_path1, END_COLOR)
             return False
 
@@ -382,7 +378,7 @@ class AFSImageComparator:
         for i in range(len(lineslist1)):
             if lineslist1[i] != lineslist2[i]:
                 retval = False
-                if VERBOSE:
+                if AFSImageComparator.VERBOSE:
                     print "{0} {1}aapt results have different lines!\n{2}\n{3}{4}".format(datetime.datetime.now(), FAIL_COLOR, lineslist1[i], lineslist2[i], END_COLOR)
                 break
 
@@ -428,7 +424,7 @@ class AFSImageComparator:
                     sum2 = get_hash_from_file_or_process(f2, hashlib.sha1())
                 if sum1 != sum2:
                     retval = False
-                    if VERBOSE:
+                    if AFSImageComparator.VERBOSE:
                         print "{0} {1}checksums differ! {2}{3}{4}".format(datetime.datetime.now(), FAIL_COLOR, locDir, filelist[i], END_COLOR)
                 #else:
                     #print locDir + filelist[i] + ' checksums same - ok'
@@ -444,7 +440,7 @@ class AFSImageComparator:
     
     def run(self):
         if (self.localMountpointPath is None) or (self.extMountpointPath is None):
-            if VERBOSE:
+            if AFSImageComparator.VERBOSE:
                 print datetime.datetime.now(), FAIL_COLOR + "Cannot run dummy AFSImageComparator!" + END_COLOR + "\nInstances without .img files are for unit tests only."
             return False
         areImagesSame=True
@@ -454,7 +450,7 @@ class AFSImageComparator:
             with open('allowed-missing-files') as missings_file:
                 missings_list = missings_file.read().splitlines()
         except IOError:
-                if VERBOSE:
+                if AFSImageComparator.VERBOSE:
                     print datetime.datetime.now(), WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
                 missings_list = []
 
@@ -463,7 +459,7 @@ class AFSImageComparator:
             aapt_available = False
             del self.compareMethodDictionary['*.jar']
             del self.compareMethodDictionary['*.apk']
-            if VERBOSE:
+            if AFSImageComparator.VERBOSE:
                 print datetime.datetime.now(), FAIL_COLOR + 'No aapt utility found, so do not compare java files and fail implicitly at the end' + END_COLOR
 
         for extension_pattern in self.compareMethodDictionary.keys():
@@ -514,7 +510,6 @@ class AFSImageComparator:
 
 def main():
     global tester
-    global VERBOSE
     signal.signal(signal.SIGINT,  signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     parser = argparse.ArgumentParser()
@@ -523,10 +518,7 @@ def main():
     parser.add_argument("--tmp-dir", help="path to tmp-dir")
     parser.add_argument("-v", "--verbose", help="verbose output", action="store_true")
     args = parser.parse_args()
-    if args.verbose:
-        VERBOSE = True
-    else:
-        VERBOSE = False
+    AFSImageComparator.VERBOSE = args.verbose
     local_img = args.local_img
     ext_img = args.ext_img
     tmp_root = args.tmp_dir
@@ -534,7 +526,7 @@ def main():
     if not (os.path.isfile(local_img) and
         os.path.isfile(ext_img)):
         print datetime.datetime.now(), FAIL_COLOR + "Toubles while accessing system images." + END_COLOR
-        if VERBOSE:
+        if AFSImageComparator.VERBOSE:
             print datetime.datetime.now(), local_img
             print datetime.datetime.now(), ext_img
         parser.print_help()

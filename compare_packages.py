@@ -12,7 +12,7 @@ import signal
 import shutil
 
 from operator import itemgetter
-from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, linux_like_find, VERBOSE
+from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, linux_like_find
 
 def extractSystemImage(archive, folder):
     try:
@@ -33,7 +33,8 @@ def extractSystemImage(archive, folder):
             buildName = dummy
         extractTo = folder + buildName + '/'
         os.mkdir(extractTo)
-        print 'extracting ' + systemImageArchivePathList[0] + '\nfrom ' + archive
+        if AFSImageComparator.VERBOSE:
+            print 'extracting ' + systemImageArchivePathList[0] + '\nfrom ' + archive
         Package.extract(systemImageArchivePathList[0], extractTo)
         return linux_like_find(extractTo, ImageFilename)
     except:
@@ -51,7 +52,8 @@ def findNewestBuild(folder, template):
     return FoundList[0][0]
 
 def cleanup():
-    print "Making extracted sysImages and workDir cleanup\nrm -rf", workPath
+    if AFSImageComparator.VERBOSE:
+        print "Making extracted sysImages and workDir cleanup\nrm -rf", workPath
     if workPath and os.path.isdir(workPath):
         shutil.rmtree(workPath)
 
@@ -80,7 +82,9 @@ def main():
     group.add_argument("--external_dir", "-d", help="path to daily builds folder")
     parser.add_argument("--tmp-dir", help="path to tmp-dir", required=False)
     parser.add_argument("--pattern", "-p", help="archive package name pattern, used with -d option", required=False, default = "*.gz")
+    parser.add_argument("-v", "--verbose", help="Verbose output", action="store_true")
     args = parser.parse_args()
+    AFSImageComparator.VERBOSE = args.verbose
 
     nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
 
@@ -96,10 +100,9 @@ def main():
             sys.exit(1)
         externalPackage = args.external_package
     else:
-        print "Ext dir is " + args.external_dir
+        if AFSImageComparator.VERBOSE:
+            print "Ext dir is " + args.external_dir
         externalPackage = findNewestBuild(args.external_dir, args.pattern)
-    
-    print "Comparing to " + externalPackage 
     if args.tmp_dir:
         tmpDir = args.tmp_dir if args.tmp_dir.endswith('/') else args.tmp_dir + '/'
     else:
@@ -107,6 +110,7 @@ def main():
     global workPath;
     workPath = tmpDir + nowString + '/'
     os.mkdir(workPath)
+    print "Comparing " + args.internal_package + " to " + externalPackage
     internalSysImageRetlist = extractSystemImage(args.internal_package, workPath)
     if internalSysImageRetlist is None:
         print FAIL_COLOR + 'Failed to extract internal sysImage' + END_COLOR + "\nfrom " + args.internal_package

@@ -29,7 +29,7 @@ import signal
 
 from subprocess import Popen, PIPE
 
-from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, realpath, get_elf_sections, determine_missing_elf_sections, VERBOSE
+from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, realpath, get_elf_sections, determine_missing_elf_sections
 
 class GeneralScriptBehaviourTestSuite(unittest.TestCase):
     """
