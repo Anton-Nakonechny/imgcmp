@@ -476,12 +476,12 @@ class AFSImageComparator:
                 elif checkret is AFSImageComparator.FILE_DIFF:
                     areImagesSame = False
                     self.differentCountDictionary[extension_pattern] += 1
-                    if VERBOSE:
+                    if AFSImageComparator.VERBOSE:
                         print datetime.datetime.now(), basename + FAIL_COLOR + " doesn't match!" + END_COLOR
                 elif checkret is AFSImageComparator.FILE_MISS:
                     areImagesSame = False
                     self.differentCountDictionary[extension_pattern] += 1
-                    if VERBOSE:
+                    if AFSImageComparator.VERBOSE:
                         print datetime.datetime.now(), basename + FAIL_COLOR + " missing!" + END_COLOR
 
         if aapt_available is not True:
