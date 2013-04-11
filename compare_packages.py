@@ -10,6 +10,7 @@ import re
 import datetime
 import signal
 import shutil
+import xml.etree.ElementTree
 
 from operator import itemgetter
 from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, linux_like_find
@@ -70,6 +71,13 @@ def signal_handler(signum, frame):
     cleanup()
     sys.exit(exitstr)
 
+def parse_build_number(path_to_xml):
+    if not os.path.isfile(path_to_xml):
+         return None
+    pattern_tag = 'number'
+    tree = xml.etree.ElementTree.parse(path_to_xml)
+    return str(tree.getroot().find(pattern_tag).text)
+
 def main():
     print 'Android burn package comparator v1.0 - GlobalLogic Ukraine, 2013\n'
     global systemImageComparator
@@ -93,6 +101,12 @@ def main():
         print FAIL_COLOR + "Problems with reading internal package" + END_COLOR + '\n'
         parser.print_help()
         sys.exit(1)
+
+    build_num = parse_build_number(os.path.dirname(args.internal_package)+'/../build.xml')
+    if build_num:
+        print 'Local BUILD:', build_num
+    else:
+        print '{0}Unknown build: Cannot find build.xml{1}'.format(WARNING_COLOR, END_COLOR)
 
     if args.external_package:
         if not (os.path.isfile(args.external_package) and os.access(args.external_package, os.R_OK)):
