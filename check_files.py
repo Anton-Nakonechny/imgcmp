@@ -482,6 +482,8 @@ class AFSImageComparator(object):
                 print datetime.datetime.now(), FAIL_COLOR + 'No aapt utility found, so do not compare java files and fail implicitly at the end' + END_COLOR
 
         for extension_pattern in self.compareMethodDictionary.keys():
+            if AFSImageComparator.VERBOSE:
+                print "\nComparing {0} files...".format(extension_pattern)
             ext_files_list = linux_like_find (self.extMountpointPath, extension_pattern)
             self.totalCountDictionary[extension_pattern] = len(ext_files_list)
 
@@ -497,12 +499,19 @@ class AFSImageComparator(object):
                         areImagesSame = False
                         self.differentCountDictionary[extension_pattern] += 1
                         if AFSImageComparator.VERBOSE:
-                            print datetime.datetime.now(), basename + FAIL_COLOR + " doesn't match!" + END_COLOR
+                            print "{1} {0:<4}{2} {3}doesn't match!{4}".format(str(self.differentCountDictionary[extension_pattern]) + ".",
+                                                                               datetime.datetime.now(), basename, FAIL_COLOR, END_COLOR)
                     elif checkret is AFSImageComparator.FILE_MISS:
                         areImagesSame = False
                         self.differentCountDictionary[extension_pattern] += 1
                         if AFSImageComparator.VERBOSE:
-                            print datetime.datetime.now(), basename + FAIL_COLOR + " missing!" + END_COLOR
+                            print "{1} {0:<4} {2} {3}missing!{4}".format(
+                                                                    str(self.differentCountDictionary[extension_pattern]) + ".",
+                                                                    datetime.datetime.now(),
+                                                                    basename, FAIL_COLOR, END_COLOR
+                                                                        )
+            if AFSImageComparator.VERBOSE:
+                print "\nFinished comparing {1} \'{0}\' files".format(extension_pattern, self.totalCountDictionary[extension_pattern])
 
         if aapt_available is not True:
             areImagesSame = False   # implicitly set to False
