@@ -12,6 +12,7 @@ import hashlib
 import signal
 import getpass
 import shutil
+import cStringIO
 
 def DFS(root, skip_symlinks = 1):
     """Depth first search traversal of directory structure."""
@@ -161,15 +162,30 @@ if sys.stdout.isatty():
     WARNING_COLOR = '\033[93m'
     FAIL_COLOR = '\033[91m'
     OK_COLOR = '\033[92m'
-    END_COLOR    = '\033[0m'
+    END_COLOR = '\033[0m'
 else:
     # output is redirected
     WARNING_COLOR = ''
     FAIL_COLOR = ''
     OK_COLOR = ''
-    END_COLOR    = ''
+    END_COLOR = ''
 
-class AFSImageComparator:
+class StdoutRedirector(object):
+    def __enter__(self):
+        self.so = sys.stdout
+        self.buff = cStringIO.StringIO()
+        sys.stdout = self.buff
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        sys.stdout = self.so
+        lines = self.buff.getvalue().splitlines()
+        self.buff.close()
+        if len(lines) > 0:
+            print "\n{0}".format(lines.pop().strip())
+        for line in lines:
+            print re.sub('(^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ )', '\g<1>    ', line.strip())
+
+class AFSImageComparator(object):
     VERBOSE = True
     # file_check() result codes
     FILE_SAME = 0
@@ -379,7 +395,10 @@ class AFSImageComparator:
             if lineslist1[i] != lineslist2[i]:
                 retval = False
                 if AFSImageComparator.VERBOSE:
-                    print "{0} {1}aapt results have different lines!\n{2}\n{3}{4}".format(datetime.datetime.now(), FAIL_COLOR, lineslist1[i], lineslist2[i], END_COLOR)
+                    datetime_now = datetime.datetime.now()
+                    print "{0} {1}aapt results have different lines!{2}".format(datetime_now, FAIL_COLOR, END_COLOR)
+                    print "{0} {1}{2}{3}".format(datetime_now, FAIL_COLOR, lineslist1[i], END_COLOR)
+                    print "{0} {1}{2}{3}".format(datetime_now, FAIL_COLOR, lineslist2[i], END_COLOR)
                 break
 
         return retval
@@ -467,22 +486,23 @@ class AFSImageComparator:
             self.totalCountDictionary[extension_pattern] = len(ext_files_list)
 
             for file_wholename in ext_files_list:
-                basename = re.sub(self.extMountpointPath, '/', file_wholename)
-                checkret = self.file_check(basename, self.localMountpointPath, self.extMountpointPath, self.compareMethodDictionary[extension_pattern] , missings_list)
-                if checkret is AFSImageComparator.FILE_SAME:
-                    pass
-                elif checkret is AFSImageComparator.FILE_MISS_ALLOWED:
-                    pass
-                elif checkret is AFSImageComparator.FILE_DIFF:
-                    areImagesSame = False
-                    self.differentCountDictionary[extension_pattern] += 1
-                    if AFSImageComparator.VERBOSE:
-                        print datetime.datetime.now(), basename + FAIL_COLOR + " doesn't match!" + END_COLOR
-                elif checkret is AFSImageComparator.FILE_MISS:
-                    areImagesSame = False
-                    self.differentCountDictionary[extension_pattern] += 1
-                    if AFSImageComparator.VERBOSE:
-                        print datetime.datetime.now(), basename + FAIL_COLOR + " missing!" + END_COLOR
+                with StdoutRedirector() as stdout_redirector:
+                    basename = re.sub(self.extMountpointPath, '/', file_wholename)
+                    checkret = self.file_check(basename, self.localMountpointPath, self.extMountpointPath, self.compareMethodDictionary[extension_pattern] , missings_list)
+                    if checkret is AFSImageComparator.FILE_SAME:
+                        pass
+                    elif checkret is AFSImageComparator.FILE_MISS_ALLOWED:
+                        pass
+                    elif checkret is AFSImageComparator.FILE_DIFF:
+                        areImagesSame = False
+                        self.differentCountDictionary[extension_pattern] += 1
+                        if AFSImageComparator.VERBOSE:
+                            print datetime.datetime.now(), basename + FAIL_COLOR + " doesn't match!" + END_COLOR
+                    elif checkret is AFSImageComparator.FILE_MISS:
+                        areImagesSame = False
+                        self.differentCountDictionary[extension_pattern] += 1
+                        if AFSImageComparator.VERBOSE:
+                            print datetime.datetime.now(), basename + FAIL_COLOR + " missing!" + END_COLOR
 
         if aapt_available is not True:
             areImagesSame = False   # implicitly set to False
