@@ -193,6 +193,36 @@ class StdoutRedirector(object):
         for line in lines:
             print re.sub('(^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ )', '\g<1>    ', line.strip())
 
+class AllowedDifferences(object):
+    def __init__(self, filepath):
+        self.allowed_diff_list = []
+        self.allowed_diff_rules = {}
+
+        contents = []
+        if os.access(filepath, os.R_OK):
+            contents = [line.strip() for line in open(filepath)
+                        if not (line.strip().startswith('#') or line.strip() == '')]
+
+        # List of files that allowed to be different
+        self.allowed_diff_list = [line for line in contents if ':' not in line]
+        # Dictionary of rules for files to be skipped
+        for line in contents:
+            if ':' in line:
+                key, value = line.split(':')
+                # Add "*" to the beginning and replace "*" by ".*" for regular expressions work
+                key_reg = re.sub('\*.', '.*', '*' + key)
+                self.allowed_diff_rules[key_reg.strip()] = [it.strip() for it in value.split(',')]
+
+    def getList(self):
+        return self.allowed_diff_list
+
+    def getListForFile(self, filename):
+        skiplist = []
+        for key, val in self.allowed_diff_rules.iteritems():
+            if re.match(key, filename):
+                skiplist += val
+        return skiplist
+
 class AFSImageComparator(object):
     VERBOSE = True
     # file_check() result codes
@@ -206,6 +236,7 @@ class AFSImageComparator(object):
         self.localMountpointPath = None
         self.extMountpointPath = None
         self.prepare_work_dir(localImg, extImg, rootDirPath)
+        self.prerare_exclusions(os.path.dirname(sys.argv[0]) + '/')
 
     def __del__(self):
         if self.localMountpointPath:
@@ -216,6 +247,17 @@ class AFSImageComparator(object):
             shutil.rmtree(self.workDirPath)
             if AFSImageComparator.VERBOSE:
                 print datetime.datetime.now(), "removed " + self.workDirPath
+
+    def prerare_exclusions(self, script_parent_dir):
+        self.AllowedDiff = AllowedDifferences(script_parent_dir + 'allowed-different-files')
+        try:
+            #Assume there must be such 'allowed-missing-files' file in the same dir.
+            with open(script_parent_dir + 'allowed-missing-files') as missings_file:
+                self.AllowedMissingsList = missings_file.read().splitlines()
+        except IOError:
+                if AFSImageComparator.VERBOSE:
+                    print datetime.datetime.now(), WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
+                self.AllowedMissingsList = []
 
     def prepare_work_dir(self, localImg, extImg, rootDirPath):
         if (rootDirPath is None) or (not rootDirPath):
@@ -259,18 +301,28 @@ class AFSImageComparator(object):
         except OSError:
             print datetime.datetime.now(), badWorkDirMsg
 
-    def file_check(self, rel_path, local_mountpoint, ext_mountpoint, check_function, allowed_missings_list):
+    def file_check(self, rel_path, local_mountpoint, ext_mountpoint, check_function):
         local_filepath = re.sub('//', '/',local_mountpoint + rel_path)
         ext_filepath = re.sub('//', '/',ext_mountpoint + rel_path)
+
         if not os.path.isfile(local_filepath):
-            if (rel_path in allowed_missings_list):
+            if (rel_path in self.AllowedMissingsList):
                 return AFSImageComparator.FILE_MISS_ALLOWED
             else:
                 return AFSImageComparator.FILE_MISS
-        if check_function(self, local_filepath, ext_filepath) is True:
-            return AFSImageComparator.FILE_SAME
+
+        if rel_path not in self.AllowedDiff.getList():
+            # Check file
+            if check_function(self, local_filepath, ext_filepath) is True:
+                ret = AFSImageComparator.FILE_SAME
+            else:
+                ret = AFSImageComparator.FILE_DIFF
         else:
-            return AFSImageComparator.FILE_DIFF
+            # Don't check file and implicitly return FILE_SAME
+            ret = AFSImageComparator.FILE_SAME
+            if AFSImageComparator.VERBOSE:
+                print "{0} {1} was not compared! It is in allowed diff list".format(datetime.datetime.now(), rel_path)
+        return ret
 
     # Deprecated method
     def md5_hashlib(self, cmd):
@@ -391,7 +443,7 @@ class AFSImageComparator(object):
             return None
 
     def show_aapt_diffs(self, l1, l2, branch):
-	max_visible = 10
+        max_visible = 10
         diffs = list( set(l1) - set(l2) )
 	if len(diffs):
 	    print "{0}{1}   Branch {2} differences: {3}{4}".format(timeStamp(), END_COLOR, branch, len(diffs), END_COLOR)
@@ -409,16 +461,6 @@ class AFSImageComparator(object):
         lineslist1 = self.get_aapt_results(package_path1)
         lineslist2 = self.get_aapt_results(package_path2)
         return self.show_aapt_diffs(lineslist1, lineslist2, "main-jb-omap-tablet") and self.show_aapt_diffs(lineslist2, lineslist1, "omap-bringup-jb-tablet")
-
-    def need_to_skip_line(self, path):
-        '''used to skip directories; and files from skiplist'''
-        if not os.path.isfile(path):
-            return True
-        skiplist = ['AndroidManifest.xml','MANIFEST.MF', 'CERT.RSA', 'CERT.SF']
-        for sk in skiplist:
-            if path.endswith(sk):
-                return True
-        return False
 
     def compare_packages_by_contents(self, loc_path, ext_path):
         # get files lists using aapt
@@ -443,19 +485,20 @@ class AFSImageComparator(object):
 
         retval = True
         iterator = 0
-        for i in range(len(filelist)):
-            if not self.need_to_skip_line(locDir+filelist[i]):
-                with open(locDir + filelist[i]) as f1:
+        skiplist = self.AllowedDiff.getListForFile(loc_path)
+        for f in filelist:
+            if os.path.isfile(locDir + f) and f not in skiplist:
+                with open(locDir + f) as f1:
                     sum1 = get_hash_from_file_or_process(f1, hashlib.sha1())
-                with open(extDir + filelist[i]) as f2:
+                with open(extDir + f) as f2:
                     sum2 = get_hash_from_file_or_process(f2, hashlib.sha1())
                 if sum1 != sum2:
                     iterator += 1
                     retval = False
                     if AFSImageComparator.VERBOSE:
-                        print "{0} {1}   {2}) checksums differ! {3}{4}{5}".format(datetime.datetime.now(), FAIL_COLOR, iterator, locDir, filelist[i], END_COLOR)
+                        print "{0} {1}   {2}) checksums differ! {3}{4}{5}".format(datetime.datetime.now(), FAIL_COLOR, iterator, locDir, f, END_COLOR)
                     else:
-                        print "{0}   {1}) different {2}{3}".format(FAIL_COLOR, iterator, filelist[i], END_COLOR)
+                        print "{0}   {1}) different {2}{3}".format(FAIL_COLOR, iterator, f, END_COLOR)
                 #else:
                     #print locDir + filelist[i] + ' checksums same - ok'
 
@@ -467,22 +510,13 @@ class AFSImageComparator(object):
                                "*.jar": compare_and_process_java, "*.apk": compare_and_process_java }
     totalCountDictionary = {"*.so": 0, "*.ko": 0, "*.jar": 0, "*.apk": 0}
     differentCountDictionary = {"*.so": 0, "*.ko": 0, "*.jar": 0, "*.apk": 0}
-    
+
     def run(self):
         BRANCH_NAME = 'omap-bringup-jb-tablet'
         if (self.localMountpointPath is None) or (self.extMountpointPath is None):
             print timeStamp(), FAIL_COLOR + "Cannot run dummy AFSImageComparator!" + END_COLOR + "\nInstances without .img files are for unit tests only."
             return False
         areImagesSame=True
-        try:
-            #Assume there must be such 'allowed-missing-files' file in the same dir.
-            script_parent_dir = os.path.dirname(sys.argv[0])
-            with open('allowed-missing-files') as missings_file:
-                missings_list = missings_file.read().splitlines()
-        except IOError:
-                if AFSImageComparator.VERBOSE:
-                    print datetime.datetime.now(), WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
-                missings_list = []
 
         aapt_available = True
         if subprocess.call(['which', 'aapt'], stdout=PIPE, stderr=PIPE) != 0:
@@ -501,7 +535,7 @@ class AFSImageComparator(object):
             for file_wholename in ext_files_list:
                 with StdoutRedirector() as stdout_redirector:
                     basename = re.sub(self.extMountpointPath, '/', file_wholename)
-                    checkret = self.file_check(basename, self.localMountpointPath, self.extMountpointPath, self.compareMethodDictionary[extension_pattern] , missings_list)
+                    checkret = self.file_check(basename, self.localMountpointPath, self.extMountpointPath, self.compareMethodDictionary[extension_pattern])
                     if checkret is AFSImageComparator.FILE_SAME:
                         pass
                     elif checkret is AFSImageComparator.FILE_MISS_ALLOWED:
