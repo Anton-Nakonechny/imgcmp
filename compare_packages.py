@@ -125,7 +125,8 @@ def main():
     global workPath;
     workPath = tmpDir + nowString + '/'
     os.mkdir(workPath)
-    print "Comparing " + args.internal_package + " to " + externalPackage
+    print 'Package from internal Motorola branch (main-jb-omap-tablet): {0}'.format(args.internal_package)
+    print 'Package from external Motorola branch (omap-bringup-jb-tablet): {0}'.format(externalPackage)
     internalSysImageRetlist = extractSystemImage(args.internal_package, workPath)
     if internalSysImageRetlist is None:
         print FAIL_COLOR + 'Failed to extract internal sysImage' + END_COLOR + "\nfrom " + args.internal_package
