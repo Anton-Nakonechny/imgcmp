@@ -82,7 +82,9 @@ def determine_missing_elf_sections(filepath, sections1, sections2):
     missed = sections2.difference(sections1) # sections2 - sections1
     if len(missed) != 0:
         if AFSImageComparator.VERBOSE:
-            print "{0} {1} has missing sections: {2}".format(datetime.datetime.now(), filepath, ", ".join(missed))
+            print "{0} {1}    has missing sections: {2}".format(datetime.datetime.now(), filepath, ", ".join(missed))
+        else:
+            print "   missing sections: {0}".format(", ".join(missed))
         retval = False
     return retval
 
@@ -170,6 +172,12 @@ else:
     OK_COLOR = ''
     END_COLOR = ''
 
+def timeStamp():
+    if AFSImageComparator.VERBOSE:
+        return datetime.datetime.now()
+    else:
+        return ''
+
 class StdoutRedirector(object):
     def __enter__(self):
         self.so = sys.stdout
@@ -229,7 +237,7 @@ class AFSImageComparator(object):
         self.workDirPath = new_dir_path + '/'
         try:
             if not (os.path.isdir(rootDirPath) and os.access(rootDirPath, os.W_OK)):
-                print datetime.datetime.now(), badWorkDirMsg
+                print badWorkDirMsg
                 return
             os.mkdir(self.workDirPath)
             self.tmpDirComparison = self.workDirPath + 'jar_apk_cmp/'
@@ -312,14 +320,18 @@ class AFSImageComparator(object):
         result = determine_missing_elf_sections(file1, sections1, sections2) and determine_missing_elf_sections(file2, sections2, sections1)
 
         sections = sections1.intersection(sections2) # common section list
+        iterator = 0
         for section in sections:
             cmd1 = ["readelf", "-x", section, file1]
             cmd2 = ["readelf", "-x", section, file2]
             sum1 = self.hashOfCmd(cmd1)
             sum2 = self.hashOfCmd(cmd2)
             if (sum1 != sum2):
+                iterator += 1
                 if AFSImageComparator.VERBOSE:
-                    print "{0} {1}{2} has different {3} ELF section{4}".format(datetime.datetime.now(), FAIL_COLOR, file1, section, END_COLOR)
+                    print "{0} {1}   {2}) {3} has different {4} ELF section{5}".format(datetime.datetime.now(), FAIL_COLOR, iterator, file1, section, END_COLOR)
+                else:
+                    print "{0}   {1}) different {2} ELF section{3}".format(FAIL_COLOR, iterator, section, END_COLOR)
                 result = False
         return result
 
@@ -359,7 +371,7 @@ class AFSImageComparator(object):
             out, err = subprocess.Popen(command, stdout=PIPE, stderr=PIPE).communicate()
             if len(err) > 0:
                 if AFSImageComparator.VERBOSE:
-                    print "{0} {1}{2}{4}".format(datetime.datetime.now(), FAIL_COLOR, err, END_COLOR)
+                    print "{0} {1}{2}{3}".format(datetime.datetime.now(), FAIL_COLOR, err, END_COLOR)
             if len(out) == 0:
                 if AFSImageComparator.VERBOSE:
                     print "{0} {1}empty aapt output!{2}".format(datetime.datetime.now(), WARNING_COLOR, END_COLOR)
@@ -378,30 +390,25 @@ class AFSImageComparator(object):
         except:
             return None
 
+    def show_aapt_diffs(self, l1, l2, branch):
+	max_visible = 10
+        diffs = list( set(l1) - set(l2) )
+	if len(diffs):
+	    print "{0}{1}   Branch {2} differences: {3}{4}".format(timeStamp(), END_COLOR, branch, len(diffs), END_COLOR)
+	    index = 1
+	    for diff in diffs:
+                if index == len(diffs) and not AFSImageComparator.VERBOSE:
+                    print "{0}      ...{1}".format(FAIL_COLOR, END_COLOR) 
+                if AFSImageComparator.VERBOSE or index < max_visible or index == len(diffs):
+                    print "{0}{1}      {2}) {3}{4}".format(timeStamp(),FAIL_COLOR, index, diff, END_COLOR)
+                index += 1
+            return False
+        return True
+
     def compare_aapt_results(self, package_path1, package_path2):
         lineslist1 = self.get_aapt_results(package_path1)
         lineslist2 = self.get_aapt_results(package_path2)
-        if not lineslist1 or not lineslist2 or (len(lineslist1) == 0):
-            if AFSImageComparator.VERBOSE:
-                print "{0} {1}aapt results are empty!{2}".format(datetime.datetime.now(), FAIL_COLOR, END_COLOR)
-            return False
-        if len(lineslist1) != len(lineslist2):
-            if AFSImageComparator.VERBOSE:
-                print "{0} {1}aapt results are of different lenghts!{2}{3}{4}".format(datetime.datetime.now(), FAIL_COLOR, len(lineslist1), package_path1, END_COLOR)
-            return False
-
-        retval = True
-        for i in range(len(lineslist1)):
-            if lineslist1[i] != lineslist2[i]:
-                retval = False
-                if AFSImageComparator.VERBOSE:
-                    datetime_now = datetime.datetime.now()
-                    print "{0} {1}aapt results have different lines!{2}".format(datetime_now, FAIL_COLOR, END_COLOR)
-                    print "{0} {1}{2}{3}".format(datetime_now, FAIL_COLOR, lineslist1[i], END_COLOR)
-                    print "{0} {1}{2}{3}".format(datetime_now, FAIL_COLOR, lineslist2[i], END_COLOR)
-                break
-
-        return retval
+        return self.show_aapt_diffs(lineslist1, lineslist2, "main-jb-omap-tablet") and self.show_aapt_diffs(lineslist2, lineslist1, "omap-bringup-jb-tablet")
 
     def need_to_skip_line(self, path):
         '''used to skip directories; and files from skiplist'''
@@ -435,6 +442,7 @@ class AFSImageComparator(object):
         self.unzip(ext_path, extDir)
 
         retval = True
+        iterator = 0
         for i in range(len(filelist)):
             if not self.need_to_skip_line(locDir+filelist[i]):
                 with open(locDir + filelist[i]) as f1:
@@ -442,9 +450,12 @@ class AFSImageComparator(object):
                 with open(extDir + filelist[i]) as f2:
                     sum2 = get_hash_from_file_or_process(f2, hashlib.sha1())
                 if sum1 != sum2:
+                    iterator += 1
                     retval = False
                     if AFSImageComparator.VERBOSE:
-                        print "{0} {1}checksums differ! {2}{3}{4}".format(datetime.datetime.now(), FAIL_COLOR, locDir, filelist[i], END_COLOR)
+                        print "{0} {1}   {2}) checksums differ! {3}{4}{5}".format(datetime.datetime.now(), FAIL_COLOR, iterator, locDir, filelist[i], END_COLOR)
+                    else:
+                        print "{0}   {1}) different {2}{3}".format(FAIL_COLOR, iterator, filelist[i], END_COLOR)
                 #else:
                     #print locDir + filelist[i] + ' checksums same - ok'
 
@@ -458,9 +469,9 @@ class AFSImageComparator(object):
     differentCountDictionary = {"*.so": 0, "*.ko": 0, "*.jar": 0, "*.apk": 0}
     
     def run(self):
+        BRANCH_NAME = 'omap-bringup-jb-tablet'
         if (self.localMountpointPath is None) or (self.extMountpointPath is None):
-            if AFSImageComparator.VERBOSE:
-                print datetime.datetime.now(), FAIL_COLOR + "Cannot run dummy AFSImageComparator!" + END_COLOR + "\nInstances without .img files are for unit tests only."
+            print timeStamp(), FAIL_COLOR + "Cannot run dummy AFSImageComparator!" + END_COLOR + "\nInstances without .img files are for unit tests only."
             return False
         areImagesSame=True
         try:
@@ -478,12 +489,12 @@ class AFSImageComparator(object):
             aapt_available = False
             del self.compareMethodDictionary['*.jar']
             del self.compareMethodDictionary['*.apk']
-            if AFSImageComparator.VERBOSE:
-                print datetime.datetime.now(), FAIL_COLOR + 'No aapt utility found, so do not compare java files and fail implicitly at the end' + END_COLOR
+            print timeStamp(), FAIL_COLOR + 'No aapt utility found, so do not compare java files and fail implicitly at the end' + END_COLOR
 
         for extension_pattern in self.compareMethodDictionary.keys():
-            if AFSImageComparator.VERBOSE:
-                print "\nComparing {0} files...".format(extension_pattern)
+            print "\n==========================="
+            print "Comparing {0} files... ".format(extension_pattern)
+            print "==========================="
             ext_files_list = linux_like_find (self.extMountpointPath, extension_pattern)
             self.totalCountDictionary[extension_pattern] = len(ext_files_list)
 
@@ -498,20 +509,17 @@ class AFSImageComparator(object):
                     elif checkret is AFSImageComparator.FILE_DIFF:
                         areImagesSame = False
                         self.differentCountDictionary[extension_pattern] += 1
-                        if AFSImageComparator.VERBOSE:
-                            print "{1} {0:<4}{2} {3}doesn't match!{4}".format(str(self.differentCountDictionary[extension_pattern]) + ".",
-                                                                               datetime.datetime.now(), basename, FAIL_COLOR, END_COLOR)
+                        print "{1} {0:<4}{2} {3}doesn't match!{4}".format(str(self.differentCountDictionary[extension_pattern]) + ".",
+                                                                               timeStamp(), basename, FAIL_COLOR, END_COLOR)
                     elif checkret is AFSImageComparator.FILE_MISS:
                         areImagesSame = False
                         self.differentCountDictionary[extension_pattern] += 1
-                        if AFSImageComparator.VERBOSE:
-                            print "{1} {0:<4} {2} {3}missing!{4}".format(
+                        print "{1} {0:<4}{2} {3}missing in branch {4}!{5}".format(
                                                                     str(self.differentCountDictionary[extension_pattern]) + ".",
-                                                                    datetime.datetime.now(),
-                                                                    basename, FAIL_COLOR, END_COLOR
+                                                                    timeStamp(),
+                                                                    basename, FAIL_COLOR, BRANCH_NAME, END_COLOR
                                                                         )
-            if AFSImageComparator.VERBOSE:
-                print "\nFinished comparing {1} \'{0}\' files".format(extension_pattern, self.totalCountDictionary[extension_pattern])
+            print "\nFinished comparing {1} \'{0}\' files".format(extension_pattern, self.totalCountDictionary[extension_pattern])
 
         if aapt_available is not True:
             areImagesSame = False   # implicitly set to False
@@ -566,11 +574,14 @@ def main():
     OK = tester.run()
     del tester
     if OK:
-        print datetime.datetime.now(), OK_COLOR + "Images are same" + END_COLOR
+        print '{0}Images are same \n{1}\n{2}{3}'.format(OK_COLOR, local_img, ext_img, END_COLOR)
         result = 0
     else:
-        print datetime.datetime.now(), FAIL_COLOR + "Images are different" + END_COLOR
+        print '{0}Images are different \n{1}\n{2}{3}'.format(FAIL_COLOR, local_img, ext_img, END_COLOR)
         result = 255
+    with open('allowed-different-files') as different_file:
+        skip_list = different_file.read()
+        print '\nExcluding rules:\n', skip_list
     sys.exit(result)
 
 

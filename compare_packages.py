@@ -102,11 +102,12 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    build_num = parse_build_number(os.path.dirname(args.internal_package)+'/../build.xml')
-    if build_num:
-        print 'Local BUILD:', build_num
-    else:
-        print '{0}Unknown build: Cannot find build.xml{1}'.format(WARNING_COLOR, END_COLOR)
+    if 'lastSuccessful/archive' in str(args.internal_package):
+        build_num = parse_build_number(os.path.dirname(args.internal_package)+'/../build.xml')
+        if build_num:
+            print 'Build number on Jenkins:', build_num
+        else:
+            print '{0}Build number on Jenkins: Unknown(cannot find build.xml){1}'.format(WARNING_COLOR, END_COLOR)
 
     if args.external_package:
         if not (os.path.isfile(args.external_package) and os.access(args.external_package, os.R_OK)):
@@ -125,7 +126,7 @@ def main():
     global workPath;
     workPath = tmpDir + nowString + '/'
     os.mkdir(workPath)
-    print 'Package from internal Motorola branch (main-jb-omap-tablet): {0}'.format(args.internal_package)
+    print 'Package from internal Motorola branch (main-jb-omap-tablet):    {0}'.format(args.internal_package)
     print 'Package from external Motorola branch (omap-bringup-jb-tablet): {0}'.format(externalPackage)
     internalSysImageRetlist = extractSystemImage(args.internal_package, workPath)
     if internalSysImageRetlist is None:
