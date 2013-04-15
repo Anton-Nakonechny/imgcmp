@@ -254,15 +254,13 @@ class CompareELFObjectsTestSuite(unittest.TestCase):
                                            'unit_test_files/ko_.testmodules/nfs.ko')
         self.assertFalse(res)
 
+def suiteAll():
+    suiteAll = unittest.TestSuite()
+    suiteAll.addTest(unittest.makeSuite(GeneralScriptBehaviourTestSuite))
+    suiteAll.addTest(unittest.makeSuite(CompareImagesTestSuite))
+    suiteAll.addTest(unittest.makeSuite(CompareJavaTestSuite))
+    suiteAll.addTest(unittest.makeSuite(CompareELFObjectsTestSuite))
+    return suiteAll
+
 if __name__ == '__main__':
-    suite = unittest.TestLoader().loadTestsFromTestCase(GeneralScriptBehaviourTestSuite)
-    unittest.TextTestRunner(verbosity=2).run(suite)
-
-    suite = unittest.TestLoader().loadTestsFromTestCase(CompareImagesTestSuite)
-    unittest.TextTestRunner(verbosity=2).run(suite)
-
-    suite = unittest.TestLoader().loadTestsFromTestCase(CompareJavaTestSuite)
-    unittest.TextTestRunner(verbosity=2).run(suite)
-
-    suite = unittest.TestLoader().loadTestsFromTestCase(CompareELFObjectsTestSuite)
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    unittest.TextTestRunner(verbosity=2).run(suiteAll())
