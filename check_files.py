@@ -114,31 +114,6 @@ def get_hash_from_file_or_process(inpobj, hashfunc, blocksize=65356):
             buf = inpobj.stdout.read(blocksize)
     return hashfunc.hexdigest()
 
-#def md5_hashlib_v1(cmd):
-#    """ Execute cmd and return MD5 of it's output using hashlib.md5 for stdout.read() """
-#    global p
-#    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-#    ret = hashlib.md5(p.stdout.read()).hexdigest()
-#    perr = p.stderr.read()
-#    if (perr != ''):
-#        print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" stderr: \"' + perr[:-1] + '\"' + END_COLOR
-#    #print 'md5_hashlib_v1: md5: ' + ret
-#    return ret
-#
-#def md5_md5sum(cmd):
-#    """ Execute cmd and return MD5 of it's output using md5sum utility """
-#    global p
-#    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-#    p2 = subprocess.Popen('md5sum', stdin=p.stdout, stdout=subprocess.PIPE)
-#    perr = p.stderr.read()
-#    p.stdout.close() # Allow p to receive a SIGPIPE if p2 exits.
-#    p2out = p2.communicate()[0]
-#    if (perr != ''):
-#        print WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
-#    #print 'md5_md5sum: md5:     ' + p2out[:-4]
-#    return p2out[:-4]
-#
-
 """Check files existance at both mountpoints and than call to compare function"""
 
 def mount_loop(AbsImgPath, MountPoint):
@@ -195,33 +170,36 @@ class StdoutRedirector(object):
 
 class AllowedDifferences(object):
     def __init__(self, filepath):
-        self.allowed_diff_list = []
-        self.allowed_diff_rules = {}
+        self.excluded_files_list = []
+        self.exclusion_rules = {}
 
-        contents = []
+        exclusions_file_content = []
         if os.access(filepath, os.R_OK):
-            contents = [line.strip() for line in open(filepath)
+            exclusions_file_content = [line.strip() for line in open(filepath)
                         if not (line.strip().startswith('#') or line.strip() == '')]
 
         # List of files that allowed to be different
-        self.allowed_diff_list = [line for line in contents if ':' not in line]
+        self.excluded_files_list = [line for line in exclusions_file_content if ':' not in line]
         # Dictionary of rules for files to be skipped
-        for line in contents:
+        for line in exclusions_file_content:
             if ':' in line:
                 key, value = line.split(':')
                 # Add "*" to the beginning and replace "*" by ".*" for regular expressions work
-                key_reg = re.sub('\*.', '.*', '*' + key)
-                self.allowed_diff_rules[key_reg.strip()] = [it.strip() for it in value.split(',')]
+                key_RE = re.sub('\*.', '.*', '*' + key)
+                self.exclusion_rules[key_RE.strip()] = [it.strip() for it in value.split(',')]
 
     def getList(self):
-        return self.allowed_diff_list
+        return self.excluded_files_list
 
     def getListForFile(self, filename):
         skiplist = []
-        for key, val in self.allowed_diff_rules.iteritems():
+        for key, val in self.exclusion_rules.iteritems():
             if re.match(key, filename):
                 skiplist += val
         return skiplist
+
+EXCLUSIONS_FILE_NAME = 'exclusions-list'
+EXCLUSIONS_FILE_PATH = os.path.dirname(sys.argv[0]) + '/' + EXCLUSIONS_FILE_NAME
 
 class AFSImageComparator(object):
     VERBOSE = True
@@ -229,14 +207,14 @@ class AFSImageComparator(object):
     FILE_SAME = 0
     FILE_DIFF = 1
     FILE_MISS = 2
-    FILE_MISS_ALLOWED = 3
+    FILE_DIFF_ALLOWED = 3
 
     def __init__(self, localImg, extImg, rootDirPath):
         self.gReadelfProc = None
         self.localMountpointPath = None
         self.extMountpointPath = None
         self.prepare_work_dir(localImg, extImg, rootDirPath)
-        self.prerare_exclusions(os.path.dirname(sys.argv[0]) + '/')
+        self.AllowedDiff = AllowedDifferences(EXCLUSIONS_FILE_PATH)
 
     def __del__(self):
         if self.localMountpointPath:
@@ -247,17 +225,6 @@ class AFSImageComparator(object):
             shutil.rmtree(self.workDirPath)
             if AFSImageComparator.VERBOSE:
                 print datetime.datetime.now(), "removed " + self.workDirPath
-
-    def prerare_exclusions(self, script_parent_dir):
-        self.AllowedDiff = AllowedDifferences(script_parent_dir + 'allowed-different-files')
-        try:
-            #Assume there must be such 'allowed-missing-files' file in the same dir.
-            with open(script_parent_dir + 'allowed-missing-files') as missings_file:
-                self.AllowedMissingsList = missings_file.read().splitlines()
-        except IOError:
-                if AFSImageComparator.VERBOSE:
-                    print datetime.datetime.now(), WARNING_COLOR + "Something went wrong when tried to read shared object files list difference" + END_COLOR
-                self.AllowedMissingsList = []
 
     def prepare_work_dir(self, localImg, extImg, rootDirPath):
         if (rootDirPath is None) or (not rootDirPath):
@@ -305,23 +272,19 @@ class AFSImageComparator(object):
         local_filepath = re.sub('//', '/',local_mountpoint + rel_path)
         ext_filepath = re.sub('//', '/',ext_mountpoint + rel_path)
 
-        if not os.path.isfile(local_filepath):
-            if (rel_path in self.AllowedMissingsList):
-                return AFSImageComparator.FILE_MISS_ALLOWED
-            else:
-                return AFSImageComparator.FILE_MISS
-
         if rel_path not in self.AllowedDiff.getList():
             # Check file
-            if check_function(self, local_filepath, ext_filepath) is True:
+            if not os.path.isfile(local_filepath):
+                ret = AFSImageComparator.FILE_MISS
+            elif check_function(self, local_filepath, ext_filepath) is True:
                 ret = AFSImageComparator.FILE_SAME
             else:
                 ret = AFSImageComparator.FILE_DIFF
         else:
             # Don't check file and implicitly return FILE_SAME
-            ret = AFSImageComparator.FILE_SAME
+            ret = AFSImageComparator.FILE_DIFF_ALLOWED
             if AFSImageComparator.VERBOSE:
-                print "{0} {1} was not compared! It is in allowed diff list".format(datetime.datetime.now(), rel_path)
+                print "{0} {1} was not compared! It is in exlusions list".format(datetime.datetime.now(), rel_path)
         return ret
 
     # Deprecated method
@@ -410,7 +373,7 @@ class AFSImageComparator(object):
             #print "archives are OK", loc_file
             return True
         elif self.compare_aapt_results(loc_file, ext_file):
-            return self.compare_packages_by_contents(loc_file, ext_file)
+            return self.compare_packages_by_content(loc_file, ext_file)
         else:
             return False
 
@@ -462,7 +425,7 @@ class AFSImageComparator(object):
         lineslist2 = self.get_aapt_results(package_path2)
         return self.show_aapt_diffs(lineslist1, lineslist2, "main-jb-omap-tablet") and self.show_aapt_diffs(lineslist2, lineslist1, "omap-bringup-jb-tablet")
 
-    def compare_packages_by_contents(self, loc_path, ext_path):
+    def compare_packages_by_content(self, loc_path, ext_path):
         # get files lists using aapt
         filelist     = subprocess.Popen(['aapt', 'list', loc_path], stdout=PIPE).communicate()[0]
         filelist_ext = subprocess.Popen(['aapt', 'list', ext_path], stdout=PIPE).communicate()[0]
@@ -512,7 +475,7 @@ class AFSImageComparator(object):
     differentCountDictionary = {"*.so": 0, "*.ko": 0, "*.jar": 0, "*.apk": 0}
 
     def run(self):
-        BRANCH_NAME = 'omap-bringup-jb-tablet'
+        EXAMINED_BUILD_BRANCH_NAME = 'omap-bringup-jb-tablet'
         if (self.localMountpointPath is None) or (self.extMountpointPath is None):
             print timeStamp(), FAIL_COLOR + "Cannot run dummy AFSImageComparator!" + END_COLOR + "\nInstances without .img files are for unit tests only."
             return False
@@ -538,7 +501,7 @@ class AFSImageComparator(object):
                     checkret = self.file_check(basename, self.localMountpointPath, self.extMountpointPath, self.compareMethodDictionary[extension_pattern])
                     if checkret is AFSImageComparator.FILE_SAME:
                         pass
-                    elif checkret is AFSImageComparator.FILE_MISS_ALLOWED:
+                    elif checkret is AFSImageComparator.FILE_DIFF_ALLOWED:
                         pass
                     elif checkret is AFSImageComparator.FILE_DIFF:
                         areImagesSame = False
@@ -551,7 +514,7 @@ class AFSImageComparator(object):
                         print "{1} {0:<4}{2} {3}missing in branch {4}!{5}".format(
                                                                     str(self.differentCountDictionary[extension_pattern]) + ".",
                                                                     timeStamp(),
-                                                                    basename, FAIL_COLOR, BRANCH_NAME, END_COLOR
+                                                                    basename, FAIL_COLOR, EXAMINED_BUILD_BRANCH_NAME, END_COLOR
                                                                         )
             print "\nFinished comparing {1} \'{0}\' files".format(extension_pattern, self.totalCountDictionary[extension_pattern])
 
@@ -559,6 +522,9 @@ class AFSImageComparator(object):
             areImagesSame = False   # implicitly set to False
                                     # java files were not compared without aapt
 
+        with open(EXCLUSIONS_FILE_PATH) as exclusions_file:
+            exclusions_list = exclusions_file.read()
+            print '\n****************** Exclusion rules ******************\n', exclusions_list
         print '\n----------------- Summary -----------------'
         for key in self.totalCountDictionary.keys():
             if self.totalCountDictionary[key] > 0:
@@ -613,9 +579,6 @@ def main():
     else:
         print '{0}Images are different \n{1}\n{2}{3}'.format(FAIL_COLOR, local_img, ext_img, END_COLOR)
         result = 255
-    with open('allowed-different-files') as different_file:
-        skip_list = different_file.read()
-        print '\nExcluding rules:\n', skip_list
     sys.exit(result)
 
 
