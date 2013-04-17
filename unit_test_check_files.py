@@ -31,6 +31,7 @@ import datetime
 from subprocess import Popen, PIPE
 
 from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, realpath, get_elf_sections, determine_missing_elf_sections
+from check_files import AllowedDifferences
 
 class GeneralScriptBehaviourTestSuite(unittest.TestCase):
     """
@@ -40,7 +41,7 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
         - cleaning workdir and tmp dirs after script run
     """
     @staticmethod
-    def __are_images_mounted(mount_point1, mount_point2):
+    def __are_mount_dirs_in_mtab(mount_point1, mount_point2):
         res = False
         mounts = str(Popen(["mount"], stdout=PIPE).communicate()[0])
         if (mount_point1 in mounts) or (mount_point2 in mounts):
@@ -75,12 +76,12 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
             img_workdir1 = str(process.stdout.readline())[27:-2]
             img_workdir2 = str(process.stdout.readline())[27:-2]
             delay = 0
-            while not(self.__are_images_mounted(img_workdir1, img_workdir2) or delay>=2):
+            while not(self.__are_mount_dirs_in_mtab(img_workdir1, img_workdir2) or delay>=2):
                 time.sleep(delay)
                 delay += 0.1
             process.send_signal(sig)
             time.sleep(0.3)     # let script have time to umount loops after catching signal
-            areMounted = self.__are_images_mounted(img_workdir1, img_workdir2)
+            areMounted = self.__are_mount_dirs_in_mtab(img_workdir1, img_workdir2)
             self.assertFalse(delay>=2)
             if areMounted:
                 umount(img_workdir1)
@@ -106,13 +107,13 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
         self.assertTrue(res)
         img_workdir1 = tester.localMountpointPath
         img_workdir2 = tester.extMountpointPath
-        res = self.__are_images_mounted(img_workdir1[:-1], img_workdir2[:-1])
+        res = self.__are_mount_dirs_in_mtab(img_workdir1[:-1], img_workdir2[:-1])
         self.assertTrue(res)
         tester_WorkDir = tester.workDirPath
         del tester
         res = os.path.isdir(tester_WorkDir)
         self.assertFalse(res)
-        res = self.__are_images_mounted(img_workdir1[:-1], img_workdir2[:-1])
+        res = self.__are_mount_dirs_in_mtab(img_workdir1[:-1], img_workdir2[:-1])
         self.assertFalse(res)
 
     def test_lots_of_dummy_AFSImageComparator_instances(self):
@@ -136,6 +137,7 @@ class CompareImagesTestSuite(unittest.TestCase):
         compares two images, in one of which some files
         are missing and they are not in allowed list
         """
+        AllowedDifferences.EXCLUSIONS_FILE_PATH = "unit_test_files/exclusions-list"
         tester = AFSImageComparator("unit_test_files/img_.missed_not_allowed/missed_not_in_allowed_loc.img",
                                     "unit_test_files/img_.missed_not_allowed/missed_not_in_allowed_ext.img","")
         res = tester.run()
@@ -151,6 +153,7 @@ class CompareImagesTestSuite(unittest.TestCase):
         compares two images, in one of which some files
         are missing and they are in allowed list
         """
+        AllowedDifferences.EXCLUSIONS_FILE_PATH = "unit_test_files/exclusions-list"
         tester = AFSImageComparator("unit_test_files/img_.missed_allowed/missed_in_allowed_loc.img",
                                     "unit_test_files/img_.missed_allowed/missed_in_allowed_ext.img","")
         res = tester.run()
@@ -163,6 +166,7 @@ class CompareImagesTestSuite(unittest.TestCase):
 
     def test_equal_images(self):
         """ compares two equal images """
+        AllowedDifferences.EXCLUSIONS_FILE_PATH = "unit_test_files/exclusions-list"
         tester = AFSImageComparator("unit_test_files/img_.same_allowed/same_in_allowed_loc.img",
                                     "unit_test_files/img_.same_allowed/same_in_allowed_loc.img","")
         res = tester.run()
@@ -254,12 +258,24 @@ class CompareELFObjectsTestSuite(unittest.TestCase):
                                            'unit_test_files/ko_.testmodules/nfs.ko')
         self.assertFalse(res)
 
+
+class ComparePackagesByContent(unittest.TestCase):
+    """ This suite is intended to check exceptions, defined in allowed-different-files """
+    def test_compare_packages_by_contents(self):
+
+        AllowedDifferences.EXCLUSIONS_FILE_PATH = "unit_test_files/exclusions-list"
+        tester = AFSImageComparator("","","")
+        res = tester.compare_packages_by_content('unit_test_files/jar_.all_diff_in_allowed_different/framework-ext_loc.jar',
+                                                  'unit_test_files/jar_.all_diff_in_allowed_different/framework-ext_ext.jar')
+        self.assertTrue(res)
+
 def suiteAll():
     suiteAll = unittest.TestSuite()
     suiteAll.addTest(unittest.makeSuite(GeneralScriptBehaviourTestSuite))
     suiteAll.addTest(unittest.makeSuite(CompareImagesTestSuite))
     suiteAll.addTest(unittest.makeSuite(CompareJavaTestSuite))
     suiteAll.addTest(unittest.makeSuite(CompareELFObjectsTestSuite))
+    suiteAll.addTest(unittest.makeSuite(ComparePackagesByContent))
     return suiteAll
 
 if __name__ == '__main__':

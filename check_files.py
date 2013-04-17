@@ -173,6 +173,8 @@ class StdoutRedirector(object):
                 print '   '+line
 
 class AllowedDifferences(object):
+    EXCLUSIONS_FILE_NAME = 'exclusions-list'
+    EXCLUSIONS_FILE_PATH = os.path.dirname(sys.argv[0]) + '/' + EXCLUSIONS_FILE_NAME
     def __init__(self, filepath):
         self.excluded_files_list = []
         self.exclusion_rules = {}
@@ -202,9 +204,6 @@ class AllowedDifferences(object):
                 skiplist += val
         return skiplist
 
-EXCLUSIONS_FILE_NAME = 'exclusions-list'
-EXCLUSIONS_FILE_PATH = os.path.dirname(sys.argv[0]) + '/' + EXCLUSIONS_FILE_NAME
-
 class AFSImageComparator(object):
     VERBOSE = True
     INT_PACKAGE = ''
@@ -220,7 +219,7 @@ class AFSImageComparator(object):
         self.localMountpointPath = None
         self.extMountpointPath = None
         self.prepare_work_dir(localImg, extImg, rootDirPath)
-        self.AllowedDiff = AllowedDifferences(EXCLUSIONS_FILE_PATH)
+        self.AllowedDiff = AllowedDifferences(AllowedDifferences.EXCLUSIONS_FILE_PATH)
 
     def __del__(self):
         if self.localMountpointPath:
@@ -547,7 +546,7 @@ class AFSImageComparator(object):
             areImagesSame = False   # implicitly set to False
                                     # java files were not compared without aapt
 
-        with open(EXCLUSIONS_FILE_PATH) as exclusions_file:
+        with open(AllowedDifferences.EXCLUSIONS_FILE_PATH) as exclusions_file:
             exclusions_list = exclusions_file.read()
             print '\n****************** Exclusion rules ******************\n', exclusions_list
         print '\n----------------- Summary -----------------'

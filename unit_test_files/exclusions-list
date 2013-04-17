@@ -1,0 +1,14 @@
+# List of files that are allowed to be different
+# Example:
+#/lib/modules/caif_hsi.ko
+#
+# List of files inside apk or jar, that are allowed to be different
+# Example:
+#*.apk : AndroidManifest.xml, META-INF/MANIFEST.MF, META-INF/CERT.RSA, META-INF/CERT.SF
+#/framework/framework-ext.jar : classes.dex
+/framework-ext_loc.jar : classes.dex
+/lib/libjni_latin.so
+/lib/libjni_hwr.so
+
+*.apk : AndroidManifest.xml, META-INF/MANIFEST.MF, META-INF/CERT.RSA, META-INF/CERT.SF
+*.jar : AndroidManifest.xml, META-INF/MANIFEST.MF, META-INF/CERT.RSA, META-INF/CERT.SF
