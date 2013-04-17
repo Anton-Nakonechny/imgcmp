@@ -421,14 +421,14 @@ class AFSImageComparator(object):
                 file_aapt_diff.write(line+'\n')
 
     def show_and_compare_aapt_diffs(self, list1, list2, branch, filepath):
-        max_visible = 10
+        MAX_AAPT_OUTPUT_LINES_PRINTED = 10
         aapt_file_out = os.path.basename(filepath)
         diffs = list( set(list1) - set(list2) )
         if len(diffs) > 0:
             print "{0}{1}Branch {2} differences: {3}{4}".format(timeStamp(), END_COLOR, branch, len(diffs), END_COLOR)
             index = 1
             for diff in diffs:
-                if (index == max_visible) and (len(diffs) >= max_visible) and (not AFSImageComparator.VERBOSE):
+                if (index == MAX_AAPT_OUTPUT_LINES_PRINTED) and (len(diffs) >= MAX_AAPT_OUTPUT_LINES_PRINTED) and (not AFSImageComparator.VERBOSE):
                     print "{0}   ...{1}".format(FAIL_COLOR, END_COLOR)
                     print "{0}Difference is too large to be displayed - please,"\
                           " find details in the following files:{1}".format(FAIL_COLOR, END_COLOR)
@@ -438,7 +438,7 @@ class AFSImageComparator(object):
                     print "{0}External Motorola branch (omap-bringup-jb-tablet): "\
                           "./app_{1}.appt__omap-bringup-jb-tablet.txt{2}".format(FAIL_COLOR, aapt_file_out, END_COLOR)
                     self.aapt_diffs_to_file(set(list2),'app_'+aapt_file_out+'__omap-bringup-jb-tablet.txt', AFSImageComparator.EXT_PACKAGE)
-                elif (AFSImageComparator.VERBOSE) or (index < max_visible):
+                elif (AFSImageComparator.VERBOSE) or (index < MAX_AAPT_OUTPUT_LINES_PRINTED):
                     print "{0}{1}   {2}) {3}{4}".format(timeStamp(),FAIL_COLOR, index, diff, END_COLOR)
                 index += 1
             return False
