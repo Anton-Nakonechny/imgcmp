@@ -94,6 +94,8 @@ def main():
     parser.add_argument("-v", "--verbose", help="Verbose output", action="store_true")
     args = parser.parse_args()
     AFSImageComparator.VERBOSE = args.verbose
+    AFSImageComparator.INT_PACKAGE = args.internal_package
+    AFSImageComparator.EXT_PACKAGE = args.external_package
 
     nowString = re.sub('\..*$','',datetime.datetime.now().isoformat('-'))
 

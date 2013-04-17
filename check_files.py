@@ -163,10 +163,14 @@ class StdoutRedirector(object):
         sys.stdout = self.so
         lines = self.buff.getvalue().splitlines()
         self.buff.close()
+        timestamp_pattern = '(^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ )'
         if len(lines) > 0:
             print "\n{0}".format(lines.pop().strip())
         for line in lines:
-            print re.sub('(^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ )', '\g<1>    ', line.strip())
+            if re.match(timestamp_pattern, line):
+                print re.sub(timestamp_pattern, '\g<1>    ', line)
+            else:
+                print '   '+line
 
 class AllowedDifferences(object):
     def __init__(self, filepath):
@@ -203,6 +207,8 @@ EXCLUSIONS_FILE_PATH = os.path.dirname(sys.argv[0]) + '/' + EXCLUSIONS_FILE_NAME
 
 class AFSImageComparator(object):
     VERBOSE = True
+    INT_PACKAGE = ''
+    EXT_PACKAGE = ''
     # file_check() result codes
     FILE_SAME = 0
     FILE_DIFF = 1
@@ -332,7 +338,8 @@ class AFSImageComparator(object):
         result = True
         sections1 = set(get_elf_sections(file1))
         sections2 = set(get_elf_sections(file2))
-        result = determine_missing_elf_sections(file1, sections1, sections2) and determine_missing_elf_sections(file2, sections2, sections1)
+        result = determine_missing_elf_sections(file1, sections1, sections2) \
+                 and determine_missing_elf_sections(file2, sections2, sections1)
 
         sections = sections1.intersection(sections2) # common section list
         iterator = 0
@@ -344,9 +351,9 @@ class AFSImageComparator(object):
             if (sum1 != sum2):
                 iterator += 1
                 if AFSImageComparator.VERBOSE:
-                    print "{0} {1}   {2}) {3} has different {4} ELF section{5}".format(datetime.datetime.now(), FAIL_COLOR, iterator, file1, section, END_COLOR)
+                    print "{0} {1}{2}) {3} has different {4} ELF section{5}".format(datetime.datetime.now(), FAIL_COLOR, iterator, file1, section, END_COLOR)
                 else:
-                    print "{0}   {1}) different {2} ELF section{3}".format(FAIL_COLOR, iterator, section, END_COLOR)
+                    print "{0}{1}) different {2} ELF section{3}".format(FAIL_COLOR, iterator, section, END_COLOR)
                 result = False
         return result
 
@@ -405,17 +412,34 @@ class AFSImageComparator(object):
         except:
             return None
 
-    def show_aapt_diffs(self, l1, l2, branch):
+    def aapt_diffs_to_file(self, set_aapt, aapt_out_file_branched, package):
+        with open (aapt_out_file_branched,'w+') as file_aapt_diff:
+            file_aapt_diff.write('Package:'+package+'\n')
+            list_aapt = list(set_aapt)
+            list_aapt.sort()
+            for line in list_aapt:
+                file_aapt_diff.write(line+'\n')
+
+    def show_and_compare_aapt_diffs(self, list1, list2, branch, filepath):
         max_visible = 10
-        diffs = list( set(l1) - set(l2) )
-	if len(diffs):
-	    print "{0}{1}   Branch {2} differences: {3}{4}".format(timeStamp(), END_COLOR, branch, len(diffs), END_COLOR)
-	    index = 1
-	    for diff in diffs:
-                if index == len(diffs) and not AFSImageComparator.VERBOSE:
-                    print "{0}      ...{1}".format(FAIL_COLOR, END_COLOR) 
-                if AFSImageComparator.VERBOSE or index < max_visible or index == len(diffs):
-                    print "{0}{1}      {2}) {3}{4}".format(timeStamp(),FAIL_COLOR, index, diff, END_COLOR)
+        aapt_file_out = os.path.basename(filepath)
+        diffs = list( set(list1) - set(list2) )
+        if len(diffs) > 0:
+            print "{0}{1}Branch {2} differences: {3}{4}".format(timeStamp(), END_COLOR, branch, len(diffs), END_COLOR)
+            index = 1
+            for diff in diffs:
+                if (index == max_visible) and (len(diffs) >= max_visible) and (not AFSImageComparator.VERBOSE):
+                    print "{0}   ...{1}".format(FAIL_COLOR, END_COLOR)
+                    print "{0}Difference is too large to be displayed - please,"\
+                          " find details in the following files:{1}".format(FAIL_COLOR, END_COLOR)
+                    print "{0}Internal Motorola branch (main-jb-omap-tablet): "\
+                          "./app_{1}.appt__main-jb-omap-tablet.txt{2}".format(FAIL_COLOR, aapt_file_out, END_COLOR)
+                    self.aapt_diffs_to_file(set(list1),'app_'+aapt_file_out+'__main-jb-omap-tablet.txt', AFSImageComparator.INT_PACKAGE)
+                    print "{0}External Motorola branch (omap-bringup-jb-tablet): "\
+                          "./app_{1}.appt__omap-bringup-jb-tablet.txt{2}".format(FAIL_COLOR, aapt_file_out, END_COLOR)
+                    self.aapt_diffs_to_file(set(list2),'app_'+aapt_file_out+'__omap-bringup-jb-tablet.txt', AFSImageComparator.EXT_PACKAGE)
+                elif (AFSImageComparator.VERBOSE) or (index < max_visible):
+                    print "{0}{1}   {2}) {3}{4}".format(timeStamp(),FAIL_COLOR, index, diff, END_COLOR)
                 index += 1
             return False
         return True
@@ -423,7 +447,8 @@ class AFSImageComparator(object):
     def compare_aapt_results(self, package_path1, package_path2):
         lineslist1 = self.get_aapt_results(package_path1)
         lineslist2 = self.get_aapt_results(package_path2)
-        return self.show_aapt_diffs(lineslist1, lineslist2, "main-jb-omap-tablet") and self.show_aapt_diffs(lineslist2, lineslist1, "omap-bringup-jb-tablet")
+        return self.show_and_compare_aapt_diffs(lineslist1, lineslist2, "main-jb-omap-tablet",package_path1) \
+               and self.show_and_compare_aapt_diffs(lineslist2, lineslist1, "omap-bringup-jb-tablet", package_path1)
 
     def compare_packages_by_content(self, loc_path, ext_path):
         # get files lists using aapt
@@ -459,9 +484,9 @@ class AFSImageComparator(object):
                     iterator += 1
                     retval = False
                     if AFSImageComparator.VERBOSE:
-                        print "{0} {1}   {2}) checksums differ! {3}{4}{5}".format(datetime.datetime.now(), FAIL_COLOR, iterator, locDir, f, END_COLOR)
+                        print "{0} {1}{2}) checksums differ! {3}{4}{5}".format(datetime.datetime.now(), FAIL_COLOR, iterator, locDir, f, END_COLOR)
                     else:
-                        print "{0}   {1}) different {2}{3}".format(FAIL_COLOR, iterator, f, END_COLOR)
+                        print "{0}{1}) different {2}{3}".format(FAIL_COLOR, iterator, f, END_COLOR)
                 #else:
                     #print locDir + filelist[i] + ' checksums same - ok'
 
