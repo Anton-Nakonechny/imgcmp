@@ -67,14 +67,19 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
             args = ["sudo", "umount", mount_point]
             Popen(args)
 
+        def parse_mountpoint_from_stdout(process_stdout):
+            img_mount = ''
+            while (not 'mount' in img_mount):
+                img_mount = str(process_stdout.readline())
+                continue
+            # we must cut off '/' in the end because of mount point format
+            img_mount = img_mount.strip()[img_mount.rfind(' '):-1]
+            return img_mount
+
         def check_signal_handling(sig):
             process = run_compare_packages_script()
-#TODO: the next line must be reworked to more definite way of mountpoint identification.
-#at least launched at 23:59:55 will fail the test
-            while not(str(datetime.datetime.today())[:10] in process.stdout.readline()):
-                continue
-            img_workdir1 = str(process.stdout.readline())[27:-2]
-            img_workdir2 = str(process.stdout.readline())[27:-2]
+            img_workdir1 = parse_mountpoint_from_stdout(process.stdout)
+            img_workdir2 = parse_mountpoint_from_stdout(process.stdout)
             delay = 0
             while not(self.__are_mount_dirs_in_mtab(img_workdir1, img_workdir2) or delay>=2):
                 time.sleep(delay)
