@@ -205,7 +205,7 @@ class AllowedDifferences(object):
         return skiplist
 
 class AFSImageComparator(object):
-    VERBOSE = True
+    VERBOSE = False
     INT_PACKAGE = ''
     EXT_PACKAGE = ''
     # file_check() result codes
