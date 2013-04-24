@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import os
-import glob
 import sys
 import re
 import datetime
@@ -42,12 +41,15 @@ def subdirs(root, skip_symlinks = 1):
     except OSError: return []
     except IOError: return []
 
-def linux_like_find(root, pattern):
-    files = []
-    for subdir in DFS(root):
-        files += glob.glob(os.path.join (subdir, pattern))
-        files.sort()
-    return files
+def gen_file_list_by_extension(path, fileListDictionary):
+    for dirpath, dirnames, filenames in os.walk(path):
+        # ingore .Trash* dir(s), if such exist
+        dirnames[:] = [d for d in dirnames if not ".Trash" in d]
+        for fname in filenames:
+            for extension_pattern in fileListDictionary.keys():
+                match = re.match(extension_pattern, fname)
+                if match is not None:
+                    fileListDictionary[extension_pattern].append(os.path.join(dirpath, fname).replace(path, "/"))
 
 def file_in_list (rel_path, local_list):
     """finding file in list"""
@@ -492,10 +494,13 @@ class AFSImageComparator(object):
             self.del_tmp_dir(apk_dir)
         return retval
 
-    compareMethodDictionary = {"*.so": compare_shared_object, "*.ko": compare_shared_object,
-                               "*.jar": compare_and_process_java, "*.apk": compare_and_process_java }
-    totalCountDictionary = {"*.so": 0, "*.ko": 0, "*.jar": 0, "*.apk": 0}
-    differentCountDictionary = {"*.so": 0, "*.ko": 0, "*.jar": 0, "*.apk": 0}
+    compareMethodDictionary = {".*\.so$": compare_shared_object, ".*\.ko$": compare_shared_object,
+                               ".*\.jar$": compare_and_process_java, ".*\.apk$": compare_and_process_java }
+    totalCountDictionary = {".*\.so$": 0, ".*\.ko$": 0, ".*\.jar$": 0, ".*\.apk$": 0}
+    differentCountDictionary = {".*\.so$": 0, ".*\.ko$": 0, ".*\.jar$": 0, ".*\.apk$": 0}
+
+    fileListDictionary = {".*\.so$": [], ".*\.ko$": [],
+                          ".*\.jar$": [], ".*\.apk$": []}
 
     def run(self):
         EXAMINED_BUILD_BRANCH_NAME = 'omap-bringup-jb-tablet'
@@ -507,21 +512,21 @@ class AFSImageComparator(object):
         aapt_available = True
         if subprocess.call(['which', 'aapt'], stdout=PIPE, stderr=PIPE) != 0:
             aapt_available = False
-            del self.compareMethodDictionary['*.jar']
-            del self.compareMethodDictionary['*.apk']
+            del self.compareMethodDictionary[".*\.apk$"]
+            del self.compareMethodDictionary[".*\.jar$"]
             print timeStamp(), FAIL_COLOR + 'No aapt utility found, so do not compare java files and fail implicitly at the end' + END_COLOR
 
+        gen_file_list_by_extension(self.extMountpointPath, self.fileListDictionary)
         for extension_pattern in self.compareMethodDictionary.keys():
             print "\n==========================="
             print "Comparing {0} files... ".format(extension_pattern)
             print "==========================="
-            ext_files_list = linux_like_find (self.extMountpointPath, extension_pattern)
+            ext_files_list = self.fileListDictionary[extension_pattern]
             self.totalCountDictionary[extension_pattern] = len(ext_files_list)
 
-            for file_wholename in ext_files_list:
+            for fname in ext_files_list:
                 with StdoutRedirector() as stdout_redirector:
-                    basename = re.sub(self.extMountpointPath, '/', file_wholename)
-                    checkret = self.file_check(basename, self.localMountpointPath, self.extMountpointPath, self.compareMethodDictionary[extension_pattern])
+                    checkret = self.file_check(fname, self.localMountpointPath, self.extMountpointPath, self.compareMethodDictionary[extension_pattern])
                     if checkret is AFSImageComparator.FILE_SAME:
                         pass
                     elif checkret is AFSImageComparator.FILE_DIFF_ALLOWED:
@@ -530,14 +535,14 @@ class AFSImageComparator(object):
                         areImagesSame = False
                         self.differentCountDictionary[extension_pattern] += 1
                         print "{1} {0:<4}{2} {3}doesn't match!{4}".format(str(self.differentCountDictionary[extension_pattern]) + ".",
-                                                                               timeStamp(), basename, FAIL_COLOR, END_COLOR)
+                                                                               timeStamp(), fname, FAIL_COLOR, END_COLOR)
                     elif checkret is AFSImageComparator.FILE_MISS:
                         areImagesSame = False
                         self.differentCountDictionary[extension_pattern] += 1
                         print "{1} {0:<4}{2} {3}missing in branch {4}!{5}".format(
                                                                     str(self.differentCountDictionary[extension_pattern]) + ".",
                                                                     timeStamp(),
-                                                                    basename, FAIL_COLOR, EXAMINED_BUILD_BRANCH_NAME, END_COLOR
+                                                                    fname, FAIL_COLOR, EXAMINED_BUILD_BRANCH_NAME, END_COLOR
                                                                         )
             print "\nFinished comparing {1} \'{0}\' files".format(extension_pattern, self.totalCountDictionary[extension_pattern])
 
