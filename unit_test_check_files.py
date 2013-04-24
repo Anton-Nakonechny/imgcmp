@@ -284,4 +284,8 @@ def suiteAll():
     return suiteAll
 
 if __name__ == '__main__':
-    unittest.TextTestRunner(verbosity=2).run(suiteAll())
+    # buffer feature is new in version 2.7
+    if sys.version_info >= (2, 7):
+        unittest.TextTestRunner(verbosity=2,buffer=True).run(suiteAll())
+    else:
+        unittest.TextTestRunner(verbosity=2).run(suiteAll())
