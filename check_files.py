@@ -430,12 +430,12 @@ class AFSImageComparator(object):
                 if (index == MAX_AAPT_OUTPUT_LINES_PRINTED) and (len(diffs) >= MAX_AAPT_OUTPUT_LINES_PRINTED) and (not AFSImageComparator.VERBOSE):
                     print "{0}   ...{1}".format(FAIL_COLOR, END_COLOR)
                     print "{0}Difference is too large to be displayed - please,"\
-                          " find details in the following files:{1}".format(FAIL_COLOR, END_COLOR)
+                          " find details in the following files \n  in <cwd>: \'{1}\'{2}".format(FAIL_COLOR, os.getcwd(), END_COLOR)
                     print "{0}Internal Motorola branch (main-jb-omap-tablet): "\
-                          "./app_{1}.appt__main-jb-omap-tablet.txt{2}".format(FAIL_COLOR, aapt_file_out, END_COLOR)
+                          "<cwd>/app_{1}.appt__main-jb-omap-tablet.txt{2}".format(FAIL_COLOR, aapt_file_out, END_COLOR)
                     self.aapt_diffs_to_file(set(list1),'app_'+aapt_file_out+'__main-jb-omap-tablet.txt', AFSImageComparator.INT_PACKAGE)
                     print "{0}External Motorola branch (omap-bringup-jb-tablet): "\
-                          "./app_{1}.appt__omap-bringup-jb-tablet.txt{2}".format(FAIL_COLOR, aapt_file_out, END_COLOR)
+                          "<cwd>/app_{1}.appt__omap-bringup-jb-tablet.txt{2}".format(FAIL_COLOR, aapt_file_out, END_COLOR)
                     self.aapt_diffs_to_file(set(list2),'app_'+aapt_file_out+'__omap-bringup-jb-tablet.txt', AFSImageComparator.EXT_PACKAGE)
                 elif (AFSImageComparator.VERBOSE) or (index < MAX_AAPT_OUTPUT_LINES_PRINTED):
                     print "{0}{1}   {2}) {3}{4}".format(timeStamp(),FAIL_COLOR, index, diff, END_COLOR)
