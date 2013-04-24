@@ -114,6 +114,48 @@ def get_hash_from_file_or_process(inpobj, hashfunc, blocksize=65356):
             buf = inpobj.stdout.read(blocksize)
     return hashfunc.hexdigest()
 
+"""Check files existance at both mountpoints and than call to compare function"""
+
+def get_proc_output(command):
+    try:
+        out, err = subprocess.Popen(command, stdout=PIPE, stderr=PIPE).communicate()
+        if len(err) > 0:
+            if AFSImageComparator.VERBOSE:
+                print "{0} {1}{2}{3}".format(datetime.datetime.now(), FAIL_COLOR, err, END_COLOR)
+        if len(out) == 0:
+            if AFSImageComparator.VERBOSE:
+                print "{0} {1}empty output:{2} {3}".format(datetime.datetime.now(), WARNING_COLOR, command, END_COLOR)
+        return out
+    except:
+        return ''
+
+def get_aapt_results(package_path):
+    # quoted from: http://elinux.org/Android_aapt
+    # aapt list -a: This is similar to doing the following three commands in sequence:
+    # aapt list <pkg> ; aapt dump resources <pkg> ; aapt dump xmltree <pkg> AndroidManifest.xml.
+    #command = ['aapt', 'list', '-a', package_path]
+    command1 = ['aapt', 'list', package_path]
+    command2 = ['aapt', 'dump', '--values', 'resources', package_path]
+    command3 = ['aapt', 'dump', 'xmltree', package_path, 'AndroidManifest.xml']
+
+    out = get_proc_output(command1)
+    out += get_proc_output(command2)
+    out += get_proc_output(command3)
+
+    # Truncate android:versionName to three main digits, for example: 4.1.2
+    #pattern = '(android:versionName.*?[0-9]\.[0-9]\.[0-9])(.*?)(\")'
+    #m = re.search(pattern, out)
+    #if m is not None:
+    #    out = re.sub(m.group(2), '', out)
+    out = re.sub('(android:versionName.*?[0-9]\.[0-9]\.[0-9])(.*?)(\" \(Raw: \"[0-9]\.[0-9]\.[0-9])(.*?)(\"\))', '\g<1>\g<3>\g<5>', out)
+
+    # Remove "resource 0x123456" and "d=0x123456" from line, as they show only shift of resouces' addresses
+    out = re.sub('resource 0x[0-9A-Fa-f]* ', '', out)
+    out = re.sub('d=0x[0-9A-Fa-f]* ', '', out)
+
+    outlist = out.splitlines()
+    return outlist
+
 def mount_loop(AbsImgPath, MountPoint):
     cmd = ['sudo','mount', '-o', 'loop,ro', AbsImgPath, MountPoint]
     subprocess.check_call(cmd, shell=False)
@@ -366,34 +408,6 @@ class AFSImageComparator(object):
         else:
             return False
 
-    def get_aapt_results(self, package_path):
-        # quoted from: http://elinux.org/Android_aapt
-        # aapt list -a: This is similar to doing the following three commands in sequence:
-        # aapt list <pkg> ; aapt dump resources <pkg> ; aapt dump xmltree <pkg> AndroidManifest.xml.
-        command = ['aapt', 'list', '-a', package_path]
-        try:
-            out, err = subprocess.Popen(command, stdout=PIPE, stderr=PIPE).communicate()
-            if len(err) > 0:
-                if AFSImageComparator.VERBOSE:
-                    print "{0} {1}{2}{3}".format(datetime.datetime.now(), FAIL_COLOR, err, END_COLOR)
-            if len(out) == 0:
-                if AFSImageComparator.VERBOSE:
-                    print "{0} {1}empty aapt output!{2}".format(datetime.datetime.now(), WARNING_COLOR, END_COLOR)
-                return out
-
-            # Truncate android:versionName to three main digits, for example: 4.1.2
-            #pattern = '(android:versionName.*?[0-9]\.[0-9]\.[0-9])(.*?)(\")'
-            #m = re.search(pattern, out)
-            #if m is not None:
-            #    out = re.sub(m.group(2), '', out)
-            out = re.sub('(android:versionName.*?[0-9]\.[0-9]\.[0-9])(.*?)(\" \(Raw: \"[0-9]\.[0-9]\.[0-9])(.*?)(\"\))', '\g<1>\g<3>\g<5>', out)
-            # Turn output to list of lines and sort it, because sometimes list are same but order differs
-            outlist = out.splitlines()
-            outlist.sort()
-            return outlist
-        except:
-            return None
-
     def aapt_diffs_to_file(self, set_aapt, aapt_out_file_branched, package):
         with open (aapt_out_file_branched,'w+') as file_aapt_diff:
             file_aapt_diff.write('Package:'+package+'\n')
@@ -405,6 +419,8 @@ class AFSImageComparator(object):
     def show_and_compare_aapt_diffs(self, list1, list2, branch, filepath):
         MAX_AAPT_OUTPUT_LINES_PRINTED = 10
         aapt_file_out = os.path.basename(filepath)
+        FILE_MAIN_JB_OMAP = 'app_'+aapt_file_out+'.appt__main-jb-omap-tablet.txt'
+        FILE_OMAP_BRINGUP_JB = 'app_'+aapt_file_out+'.appt__omap-bringup-jb-tablet.txt'
         diffs = list( set(list1) - set(list2) )
         if len(diffs) > 0:
             print "{0}{1}Branch {2} differences: {3}{4}".format(timeStamp(), END_COLOR, branch, len(diffs), END_COLOR)
@@ -415,11 +431,11 @@ class AFSImageComparator(object):
                     print "{0}Difference is too large to be displayed - please,"\
                           " find details in the following files \n  in <cwd>: \'{1}\'{2}".format(FAIL_COLOR, os.getcwd(), END_COLOR)
                     print "{0}Internal Motorola branch (main-jb-omap-tablet): "\
-                          "<cwd>/app_{1}.appt__main-jb-omap-tablet.txt{2}".format(FAIL_COLOR, aapt_file_out, END_COLOR)
-                    self.aapt_diffs_to_file(set(list1),'app_'+aapt_file_out+'__main-jb-omap-tablet.txt', AFSImageComparator.INT_PACKAGE)
+                          "<cwd>/{1}{2}".format(FAIL_COLOR, FILE_MAIN_JB_OMAP, END_COLOR)
+                    self.aapt_diffs_to_file(set(list1), FILE_MAIN_JB_OMAP, AFSImageComparator.INT_PACKAGE)
                     print "{0}External Motorola branch (omap-bringup-jb-tablet): "\
-                          "<cwd>/app_{1}.appt__omap-bringup-jb-tablet.txt{2}".format(FAIL_COLOR, aapt_file_out, END_COLOR)
-                    self.aapt_diffs_to_file(set(list2),'app_'+aapt_file_out+'__omap-bringup-jb-tablet.txt', AFSImageComparator.EXT_PACKAGE)
+                          "<cwd>/{1}{2}".format(FAIL_COLOR, FILE_OMAP_BRINGUP_JB, END_COLOR)
+                    self.aapt_diffs_to_file(set(list2), FILE_OMAP_BRINGUP_JB, AFSImageComparator.EXT_PACKAGE)
                 elif (AFSImageComparator.VERBOSE) or (index < MAX_AAPT_OUTPUT_LINES_PRINTED):
                     print "{0}{1}   {2}) {3}{4}".format(timeStamp(),FAIL_COLOR, index, diff, END_COLOR)
                 index += 1
@@ -427,8 +443,8 @@ class AFSImageComparator(object):
         return True
 
     def compare_aapt_results(self, package_path1, package_path2):
-        lineslist1 = self.get_aapt_results(package_path1)
-        lineslist2 = self.get_aapt_results(package_path2)
+        lineslist1 = get_aapt_results(package_path1)
+        lineslist2 = get_aapt_results(package_path2)
         return self.show_and_compare_aapt_diffs(lineslist1, lineslist2, "main-jb-omap-tablet",package_path1) \
                and self.show_and_compare_aapt_diffs(lineslist2, lineslist1, "omap-bringup-jb-tablet", package_path1)
 
