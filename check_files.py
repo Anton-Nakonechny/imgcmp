@@ -538,6 +538,11 @@ class AFSImageComparator(object):
                             ".*\.apk$": 0, "(?!.*\.[so|ko|jar|apk])": 0}
     differentCountDictionary = {".*\.so$": 0, ".*\.ko$": 0, ".*\.jar$": 0,
                                 ".*\.apk$": 0, "(?!.*\.[so|ko|jar|apk])": 0}
+    fileDescriptionDictionary = {".*\.so$": ".so files (shared libraries compared with readelf)",
+                                 ".*\.ko$": ".ko files (kernel modules compared with readelf)",
+                                 ".*\.jar$": ".jar files (Java libraries compared with aapt)",
+                                 ".*\.apk$": ".apk (Android Package files compared with aapt)",
+                                 "(?!.*\.[so|ko|jar|apk])": "remaining files compared by hash sum"}
 
     fileListDictionary = {".*\.so$": [], ".*\.ko$": [],
                           ".*\.jar$": [], ".*\.apk$": [],
@@ -559,9 +564,9 @@ class AFSImageComparator(object):
 
         gen_file_list_by_extension(self.extMountpointPath, self.fileListDictionary)
         for extension_pattern in self.compareMethodDictionary.keys():
-            print "\n==========================="
-            print "Comparing {0} files... ".format(extension_pattern)
-            print "==========================="
+            print "\n================================================================"
+            print "Checking {0}... ".format(self.fileDescriptionDictionary[extension_pattern])
+            print "================================================================"
             ext_files_list = self.fileListDictionary[extension_pattern]
             self.totalCountDictionary[extension_pattern] = len(ext_files_list)
 
@@ -583,9 +588,9 @@ class AFSImageComparator(object):
                         print "{1} {0:<4}{2} {3}missing in branch {4}!{5}".format(
                                                                     str(self.differentCountDictionary[extension_pattern]) + ".",
                                                                     timeStamp(),
-                                                                    fname, FAIL_COLOR, EXAMINED_BUILD_BRANCH_NAME, END_COLOR
-                                                                        )
-            print "\nFinished comparing {1} \'{0}\' files".format(extension_pattern, self.totalCountDictionary[extension_pattern])
+                                                                    fname, FAIL_COLOR, EXAMINED_BUILD_BRANCH_NAME, END_COLOR)
+            print "\nFinished checking {1} {0}".format(self.fileDescriptionDictionary[extension_pattern],
+                                                                  self.totalCountDictionary[extension_pattern])
 
         if aapt_available is not True:
             areImagesSame = False   # implicitly set to False
@@ -594,15 +599,15 @@ class AFSImageComparator(object):
         with open(AllowedDifferences.EXCLUSIONS_FILE_PATH) as exclusions_file:
             exclusions_list = exclusions_file.read()
             print '\n****************** Exclusion rules ******************\n', exclusions_list
-        print '\n----------------- Summary -----------------'
+        print '\n------------------------------------ Summary ------------------------------------'
         for key in self.totalCountDictionary.keys():
             if self.totalCountDictionary[key] > 0:
                 group_perc = self.differentCountDictionary[key] / float(self.totalCountDictionary[key]) * 100
             else:
                 group_perc = 0
-            print '{0:>3} {1:<5} files differ:{2:>5}% ({0}/{3})'.format(self.differentCountDictionary[key],
-                                                                        key, round(group_perc, 1),
-                                                                        self.totalCountDictionary[key])
+            print '{0:>3} {1:50} differ:{2:>5}% ({0}/{3})'.format(self.differentCountDictionary[key],
+                                                                        self.fileDescriptionDictionary[key],
+                                                                        round(group_perc, 1), self.totalCountDictionary[key])
         if sum(self.totalCountDictionary.values()) > 0:
             total_perc = sum(self.differentCountDictionary.values()) / float(sum(self.totalCountDictionary.values())) * 100
         else:
@@ -610,7 +615,7 @@ class AFSImageComparator(object):
         print '\n Total difference:{0:>5}% ({1}/{2})'.format(round(total_perc, 1),
                                                              sum(self.differentCountDictionary.values()),
                                                              sum(self.totalCountDictionary.values()))
-        print '-------------------------------------------\n'
+        print '---------------------------------------------------------------------------------\n'
 
         return areImagesSame
 
