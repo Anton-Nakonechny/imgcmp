@@ -116,9 +116,9 @@ def get_hash_from_file_or_process(inpobj, hashfunc, blocksize=65356):
 
 def mount_loop(AbsImgPath, MountPoint):
     cmd = ['sudo','mount', '-o', 'loop,ro', AbsImgPath, MountPoint]
+    subprocess.check_call(cmd, shell=False)
     if AFSImageComparator.VERBOSE:
         print datetime.datetime.now(), ' '.join(cmd)
-    return subprocess.check_call(cmd, shell=False)
 
 def signal_handler(signum, frame):
     global tester
