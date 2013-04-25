@@ -327,7 +327,7 @@ class AFSImageComparator(object):
             if self.gReadelfProc:
                 if (self.gReadelfProc.poll() is None):
                     self.gReadelfProc.terminate()
-            subprocess.check_call(['sudo','umount', MountPoint])
+            subprocess.check_call(['sudo','umount', '-l', MountPoint])
         except subprocess.CalledProcessError, e:
             print datetime.datetime.now(), 'umount exited with code:', e.returncode, 'see lsof output:'
             subprocess.call(['lsof', MountPoint])

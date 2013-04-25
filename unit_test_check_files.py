@@ -64,7 +64,7 @@ class GeneralScriptBehaviourTestSuite(unittest.TestCase):
             return process
 
         def umount(mount_point):
-            args = ["sudo", "umount", mount_point]
+            args = ["sudo", "umount", "-l", mount_point]
             Popen(args)
 
         def parse_mountpoint_from_stdout(process_stdout):
