@@ -391,6 +391,35 @@ class AFSImageComparator(object):
                 result = False
         return result
 
+    def open_file_guaranteed(self, fname, dirsuffix):
+        """
+        The function tries to open file and to return it fd.
+        If there are no permissions to read, it copies the file
+        with sudo cp and sets 644 permissions
+        """
+        fd = None
+        try:
+            fd = open(fname)
+
+        except IOError:
+            dstdir = self.workDirPath + "/" + "no_read_permission_files_" + dirsuffix
+            if not os.path.exists(dstdir):
+                os.mkdir(dstdir)
+            subprocess.call(['sudo', 'cp', fname, dstdir], stdout=PIPE, stderr=PIPE)
+            fname = dstdir + "/" + fname.split("/")[-1]
+            subprocess.call(['sudo', 'chmod', '644', fname], stdout=PIPE, stderr=PIPE)
+            fd = open(fname)
+
+        return fd
+
+    def compare_files_by_hash(self, file1, file2):
+        with self.open_file_guaranteed(file1, "loc") as fd1:
+            sum1 = get_hash_from_file_or_process(fd1, hashlib.sha1())
+        with self.open_file_guaranteed(file2, "ext") as fd2:
+            sum2 = get_hash_from_file_or_process(fd2, hashlib.sha1())
+
+        return sum1 == sum2
+
     def del_tmp_dir(self, path):
         if os.path.isdir(path):
             subprocess.call(['rm','-rf',str(path)], shell=False)
@@ -503,12 +532,16 @@ class AFSImageComparator(object):
         return retval
 
     compareMethodDictionary = {".*\.so$": compare_shared_object, ".*\.ko$": compare_shared_object,
-                               ".*\.jar$": compare_and_process_java, ".*\.apk$": compare_and_process_java }
-    totalCountDictionary = {".*\.so$": 0, ".*\.ko$": 0, ".*\.jar$": 0, ".*\.apk$": 0}
-    differentCountDictionary = {".*\.so$": 0, ".*\.ko$": 0, ".*\.jar$": 0, ".*\.apk$": 0}
+                               ".*\.jar$": compare_and_process_java, ".*\.apk$": compare_and_process_java,
+                               "(?!.*\.[so|ko|jar|apk])": compare_files_by_hash }
+    totalCountDictionary = {".*\.so$": 0, ".*\.ko$": 0, ".*\.jar$": 0,
+                            ".*\.apk$": 0, "(?!.*\.[so|ko|jar|apk])": 0}
+    differentCountDictionary = {".*\.so$": 0, ".*\.ko$": 0, ".*\.jar$": 0,
+                                ".*\.apk$": 0, "(?!.*\.[so|ko|jar|apk])": 0}
 
     fileListDictionary = {".*\.so$": [], ".*\.ko$": [],
-                          ".*\.jar$": [], ".*\.apk$": []}
+                          ".*\.jar$": [], ".*\.apk$": [],
+                          "(?!.*\.[so|ko|jar|apk])": []}
 
     def run(self):
         EXAMINED_BUILD_BRANCH_NAME = 'omap-bringup-jb-tablet'
