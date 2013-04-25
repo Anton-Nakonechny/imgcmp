@@ -114,8 +114,6 @@ def get_hash_from_file_or_process(inpobj, hashfunc, blocksize=65356):
             buf = inpobj.stdout.read(blocksize)
     return hashfunc.hexdigest()
 
-"""Check files existance at both mountpoints and than call to compare function"""
-
 def mount_loop(AbsImgPath, MountPoint):
     cmd = ['sudo','mount', '-o', 'loop,ro', AbsImgPath, MountPoint]
     if AFSImageComparator.VERBOSE:
@@ -290,21 +288,6 @@ class AFSImageComparator(object):
             ret = AFSImageComparator.FILE_DIFF_ALLOWED
             if AFSImageComparator.VERBOSE:
                 print "{0} {1} was not compared! It is in exlusions list".format(datetime.datetime.now(), rel_path)
-        return ret
-
-    # Deprecated method
-    def md5_hashlib(self, cmd):
-        """ Execute cmd and return MD5 of it's output using hashlib.md5 for communicate() result """
-        self.gReadelfProc = subprocess.Popen(cmd, stdout=PIPE, stderr=PIPE)
-        pout, perr = self.gReadelfProc.communicate()
-        ret = hashlib.md5(pout).hexdigest()
-        if (pout == ''):
-            if AFSImageComparator.VERBOSE:
-                print datetime.datetime.now(), WARNING_COLOR + '\"' + ' '.join(cmd) + '\" empty stdout' + END_COLOR
-        if (perr != ''):
-            if AFSImageComparator.VERBOSE:
-                print datetime.datetime.now(), WARNING_COLOR + '\"' + ' '.join(cmd) + '\" strerr: \"' + perr[:-1] + '\"' + END_COLOR
-        #print 'md5: ' + ret
         return ret
 
     def hashOfCmd(self, cmd):
