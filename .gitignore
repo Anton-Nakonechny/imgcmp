@@ -7,3 +7,6 @@
 *.DS_Store
 *.swp
 *.out
+
+# imgcmp specific
+app_*.txt
