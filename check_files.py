@@ -111,10 +111,10 @@ def get_hash_from_file_or_process(inpobj, hashfunc, blocksize=65356):
     if len(buf) == 0:
         if typename == 'file':
             if AFSImageComparator.VERBOSE:
-                print "{0} {1}hashFromFile(): Wrong input object! need file or Popen {2}{3}".format(datetime.datetime.now(), WARNING_COLOR, inpobj.name, END_COLOR)
+                print "{0} {1}get_hash_from_file_or_process(): empty input (File: {2})!{3}".format(datetime.datetime.now(), WARNING_COLOR, inpobj.name, END_COLOR)
         else:
             if AFSImageComparator.VERBOSE:
-                print "{0} {1}1get_hash_from_file_or_process(): empty input (Popen object)!{2}".format(datetime.datetime.now(), WARNING_COLOR, END_COLOR)
+                print "{0} {1}get_hash_from_file_or_process(): empty input (Popen object)!{2}".format(datetime.datetime.now(), WARNING_COLOR, END_COLOR)
 
     while len(buf) > 0:
         hashfunc.update(buf)
