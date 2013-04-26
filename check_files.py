@@ -11,6 +11,7 @@ import hashlib
 import signal
 import getpass
 import shutil
+import glob
 import cStringIO
 
 def DFS(root, skip_symlinks = 1):
@@ -40,6 +41,13 @@ def subdirs(root, skip_symlinks = 1):
         return dirs
     except OSError: return []
     except IOError: return []
+
+def linux_like_find(root, pattern):
+    files = []
+    for subdir in DFS(root):
+        files += glob.glob(os.path.join (subdir, pattern))
+        files.sort()
+    return files
 
 def gen_file_list_by_extension(path, fileListDictionary):
     for dirpath, dirnames, filenames in os.walk(path):
