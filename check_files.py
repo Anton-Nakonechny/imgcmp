@@ -413,8 +413,18 @@ class AFSImageComparator(object):
         return fd
 
     def compare_files_by_hash(self, file1, file2):
+        sum1 = "sum1"
+        sum2 = "sum2"
         with self.open_file_guaranteed(file1, "loc") as fd1:
-            sum1 = get_hash_from_file_or_process(fd1, hashlib.sha1())
+            # Reading file magic number and checking if it is ELF
+            magic_number = fd1.read(4)
+            if magic_number == '\x7fELF':
+                if AFSImageComparator.VERBOSE:
+                    basename = file1.replace(self.workDirPath, "/")
+                    print "{0} is ELF object. Comparing with readelf...".format(basename)
+                return self.compare_shared_object(file1, file2)
+            else:
+                sum1 = get_hash_from_file_or_process(fd1, hashlib.sha1())
         with self.open_file_guaranteed(file2, "ext") as fd2:
             sum2 = get_hash_from_file_or_process(fd2, hashlib.sha1())
 
