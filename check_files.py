@@ -466,7 +466,7 @@ class AFSImageComparator(object):
                 file_aapt_diff.write(line+'\n')
 
     def show_and_compare_aapt_diffs(self, list1, list2, branch, filepath):
-        MAX_AAPT_OUTPUT_LINES_PRINTED = 10
+        MAX_AAPT_OUTPUT_LINES_PRINTED = 30
         aapt_file_out = os.path.basename(filepath)
         FILE_MAIN_JB_OMAP = 'app_'+aapt_file_out+'.appt__main-jb-omap-tablet.txt'
         FILE_OMAP_BRINGUP_JB = 'app_'+aapt_file_out+'.appt__omap-bringup-jb-tablet.txt'
