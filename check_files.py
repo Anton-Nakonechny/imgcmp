@@ -323,13 +323,21 @@ class AFSImageComparator(object):
         except OSError:
             print datetime.datetime.now(), badWorkDirMsg
 
+    def check_links(self, local_link, ext_link):
+        if os.path.realpath(local_link).replace(self.localMountpointPath,'') == \
+                os.path.realpath(ext_link).replace(self.extMountpointPath,''):
+            return AFSImageComparator.FILE_SAME
+        return AFSImageComparator.FILE_DIFF
+
     def file_check(self, rel_path, local_mountpoint, ext_mountpoint, check_function):
         local_filepath = re.sub('//', '/',local_mountpoint + rel_path)
         ext_filepath = re.sub('//', '/',ext_mountpoint + rel_path)
 
         if rel_path not in self.AllowedDiff.getList():
             # Check file
-            if not os.path.isfile(local_filepath):
+            if os.path.islink(local_filepath):
+                ret = self.check_links(local_filepath, ext_filepath)
+            elif not os.path.isfile(local_filepath):
                 ret = AFSImageComparator.FILE_MISS
             elif check_function(self, local_filepath, ext_filepath) is True:
                 ret = AFSImageComparator.FILE_SAME
