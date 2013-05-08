@@ -414,24 +414,27 @@ class AFSImageComparator(object):
             if not os.path.exists(dstdir):
                 os.mkdir(dstdir)
             subprocess.call(['sudo', 'cp', fname, dstdir], stdout=PIPE, stderr=PIPE)
-            fname = dstdir + "/" + fname.split("/")[-1]
+            fname = dstdir + "/" + os.path.basename(fname)
             subprocess.call(['sudo', 'chmod', '644', fname], stdout=PIPE, stderr=PIPE)
             fd = open(fname)
 
         return fd
 
+    def is_elf(self, fname):
+        with self.open_file_guaranteed(fname, "loc") as fd:
+            # Read file magic number and check if it is ELF
+            return fd.read(4) == '\x7fELF'
+
     def compare_files_by_hash(self, file1, file2):
         sum1 = "sum1"
         sum2 = "sum2"
-        with self.open_file_guaranteed(file1, "loc") as fd1:
-            # Reading file magic number and checking if it is ELF
-            magic_number = fd1.read(4)
-            if magic_number == '\x7fELF':
-                if AFSImageComparator.VERBOSE:
-                    basename = file1.replace(self.workDirPath, "/")
-                    print "{0} is ELF object. Comparing with readelf...".format(basename)
-                return self.compare_shared_object(file1, file2)
-            else:
+        if self.is_elf(file1):
+            if AFSImageComparator.VERBOSE:
+                basename = file1.replace(self.workDirPath, "/")
+                print "{0} is ELF object. Comparing with readelf...".format(basename)
+            return self.compare_shared_object(file1, file2)
+        else:
+            with self.open_file_guaranteed(file1, "loc") as fd1:
                 sum1 = get_hash_from_file_or_process(fd1, hashlib.sha1())
         with self.open_file_guaranteed(file2, "ext") as fd2:
             sum2 = get_hash_from_file_or_process(fd2, hashlib.sha1())
