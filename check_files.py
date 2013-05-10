@@ -13,6 +13,7 @@ import getpass
 import shutil
 import glob
 import cStringIO
+import time
 
 def DFS(root, skip_symlinks = 1):
     """Depth first search traversal of directory structure."""
@@ -124,8 +125,6 @@ def get_hash_from_file_or_process(inpobj, hashfunc, blocksize=65356):
             buf = inpobj.stdout.read(blocksize)
     return hashfunc.hexdigest()
 
-"""Check files existance at both mountpoints and than call to compare function"""
-
 def get_proc_output(command):
     try:
         out, err = subprocess.Popen(command, stdout=PIPE, stderr=PIPE).communicate()
@@ -171,6 +170,32 @@ def mount_loop(AbsImgPath, MountPoint):
     subprocess.check_call(cmd, shell=False)
     if AFSImageComparator.VERBOSE:
         print datetime.datetime.now(), ' '.join(cmd)
+
+def is_command_available(cmd):
+    try:
+        subprocess.call(['which', 'which'], stdout=PIPE)
+    except OSError, e:
+        print "command \"which\" is not available! exception caught: {!r}".format(e)
+        return False
+    return (subprocess.call(['which', cmd], stdout=PIPE) == 0)
+
+def try_command_from_sudo(cmd):
+    if sys.stdout.isatty():
+        # User should enter password
+        p = subprocess.Popen(['sudo', cmd, '--help'], stdout=PIPE)
+        timeout_sec = 20
+        retry_period_sec = 0.1
+        tries_counter = 0
+        time.sleep(0.1) # let process to complete if no password is required
+        while (p.poll() == None) and (tries_counter < timeout_sec / retry_period_sec):
+            tries_counter += 1
+            time.sleep(retry_period_sec)
+        if p.poll() == None:
+            p.terminate()
+        return (p.returncode == 0)
+    else:
+        # sudo non-interactive mode
+        return (subprocess.call(['sudo', '-n', cmd, '--help'], stdout=PIPE) == 0)
 
 def signal_handler(signum, frame):
     global tester
@@ -576,12 +601,19 @@ class AFSImageComparator(object):
             return False
         areImagesSame=True
 
-        aapt_available = True
-        if subprocess.call(['which', 'aapt'], stdout=PIPE, stderr=PIPE) != 0:
-            aapt_available = False
-            del self.compareMethodDictionary[".*\.apk$"]
-            del self.compareMethodDictionary[".*\.jar$"]
-            print timeStamp(), FAIL_COLOR + 'No aapt utility found, so do not compare java files and fail implicitly at the end' + END_COLOR
+        # Check if commands are available
+        commands_list = ['mount', 'umount', 'chmod', 'cp', 'aapt']
+        for command in commands_list:
+            if is_command_available(command) is not True:
+                print "{!s}Terminating!: Please ensure that following commands: {!r} are available{!s}".format(FAIL_COLOR, commands_list, END_COLOR)
+                return False # Implicitly fail
+
+        # Check if commands have sudo rights
+        commands_list = ['mount', 'umount', 'chmod', 'cp']
+        for command in commands_list:
+            if try_command_from_sudo(command) is not True:
+                print "{!s}Terminating!: Please ensure that following commands: {!r} can be executed from sudo{!s}".format(FAIL_COLOR, commands_list, END_COLOR)
+                return False # Implicitly fail
 
         gen_file_list_by_extension(self.extMountpointPath, self.fileListDictionary)
         for extension_pattern in self.compareMethodDictionary.keys():
@@ -612,10 +644,6 @@ class AFSImageComparator(object):
                                                                     fname, FAIL_COLOR, EXAMINED_BUILD_BRANCH_NAME, END_COLOR)
             print "\nFinished checking {1} {0}".format(self.fileDescriptionDictionary[extension_pattern],
                                                                   self.totalCountDictionary[extension_pattern])
-
-        if aapt_available is not True:
-            areImagesSame = False   # implicitly set to False
-                                    # java files were not compared without aapt
 
         with open(AllowedDifferences.EXCLUSIONS_FILE_PATH) as exclusions_file:
             exclusions_list = exclusions_file.read()
