@@ -11,54 +11,21 @@ import hashlib
 import signal
 import getpass
 import shutil
-import glob
 import cStringIO
 import time
-
-def DFS(root, skip_symlinks = 1):
-    """Depth first search traversal of directory structure."""
-    stack = [root]
-    visited = {}
-    while stack:
-        d = stack.pop()
-        if d not in visited:  ## just to prevent any possible recursive
-                              ## loops
-            visited[d] = 1
-            yield d
-        stack.extend(subdirs(d, skip_symlinks))
 
 def realpath(fname):
     return os.path.normpath(os.path.join(os.getcwd(), fname))
 
-def subdirs(root, skip_symlinks = 1):
-    """Given a root directory, returns the first-level subdirectories."""
-    try:
-        dirs = [os.path.join(root, x)
-                for x in os.listdir(root)]
-        dirs = filter(os.path.isdir, dirs)
-        if skip_symlinks:
-            dirs = filter(lambda x: not os.path.islink(x), dirs)
-#        dirs.sort()
-        return dirs
-    except OSError: return []
-    except IOError: return []
-
-def linux_like_find(root, pattern):
-    files = []
-    for subdir in DFS(root):
-        files += glob.glob(os.path.join (subdir, pattern))
-        files.sort()
-    return files
-
-def gen_file_list_by_extension(path, fileListDictionary):
+def get_file_list_by_extension(path, extension_pattern):
+    retlist = []
     for dirpath, dirnames, filenames in os.walk(path):
         # ingore .Trash* dir(s), if such exist
         dirnames[:] = [d for d in dirnames if not ".Trash" in d]
         for fname in filenames:
-            for extension_pattern in fileListDictionary.keys():
-                match = re.match(extension_pattern, fname)
-                if match is not None:
-                    fileListDictionary[extension_pattern].append(os.path.join(dirpath, fname).replace(path, "/"))
+            if re.match(extension_pattern, fname) != None:
+                retlist.append(os.path.join(dirpath, fname).replace(path, '/'))
+    return retlist
 
 def file_in_list (rel_path, local_list):
     """finding file in list"""
@@ -228,6 +195,13 @@ def timeStamp():
     else:
         return ''
 
+class FileExtensionComparisonResults(object):
+    def __init__(self, cmp_method, descr, files_list):
+        self.compare_method = cmp_method
+        self.description = descr
+        self.files = files_list
+        self.diffs = []
+
 class StdoutRedirector(object):
     def __enter__(self):
         self.so = sys.stdout
@@ -364,7 +338,7 @@ class AFSImageComparator(object):
                 ret = self.check_links(local_filepath, ext_filepath)
             elif not os.path.isfile(local_filepath):
                 ret = AFSImageComparator.FILE_MISS
-            elif check_function(self, local_filepath, ext_filepath) is True:
+            elif check_function(local_filepath, ext_filepath) is True:
                 ret = AFSImageComparator.FILE_SAME
             else:
                 ret = AFSImageComparator.FILE_DIFF
@@ -395,8 +369,10 @@ class AFSImageComparator(object):
             if self.gReadelfProc:
                 if (self.gReadelfProc.poll() is None):
                     self.gReadelfProc.terminate()
+#            print "DEBUG: unmounting:" + MountPoint
             subprocess.check_call(['sudo','umount', '-l', MountPoint])
         except subprocess.CalledProcessError, e:
+#            print "DEBUG: unmounting exception!"
             print datetime.datetime.now(), 'umount exited with code:', e.returncode, 'see lsof output:'
             subprocess.call(['lsof', MountPoint])
 
@@ -577,23 +553,6 @@ class AFSImageComparator(object):
             self.del_tmp_dir(apk_dir)
         return retval
 
-    compareMethodDictionary = {".*\.so$": compare_shared_object, ".*\.ko$": compare_shared_object,
-                               ".*\.jar$": compare_and_process_java, ".*\.apk$": compare_and_process_java,
-                               "(?!.*\.[so|ko|jar|apk])": compare_files_by_hash }
-    totalCountDictionary = {".*\.so$": 0, ".*\.ko$": 0, ".*\.jar$": 0,
-                            ".*\.apk$": 0, "(?!.*\.[so|ko|jar|apk])": 0}
-    differentCountDictionary = {".*\.so$": 0, ".*\.ko$": 0, ".*\.jar$": 0,
-                                ".*\.apk$": 0, "(?!.*\.[so|ko|jar|apk])": 0}
-    fileDescriptionDictionary = {".*\.so$": ".so files (shared libraries compared with readelf)",
-                                 ".*\.ko$": ".ko files (kernel modules compared with readelf)",
-                                 ".*\.jar$": ".jar files (Java libraries compared with aapt)",
-                                 ".*\.apk$": ".apk (Android Package files compared with aapt)",
-                                 "(?!.*\.[so|ko|jar|apk])": "remaining files compared by hash sum"}
-
-    fileListDictionary = {".*\.so$": [], ".*\.ko$": [],
-                          ".*\.jar$": [], ".*\.apk$": [],
-                          "(?!.*\.[so|ko|jar|apk])": []}
-
     def run(self):
         EXAMINED_BUILD_BRANCH_NAME = 'omap-bringup-jb-tablet'
         if (self.localMountpointPath is None) or (self.extMountpointPath is None):
@@ -615,55 +574,68 @@ class AFSImageComparator(object):
                 print "{!s}Terminating!: Please ensure that following commands: {!r} can be executed from sudo{!s}".format(FAIL_COLOR, commands_list, END_COLOR)
                 return False # Implicitly fail
 
-        gen_file_list_by_extension(self.extMountpointPath, self.fileListDictionary)
-        for extension_pattern in self.compareMethodDictionary.keys():
-            print "\n================================================================"
-            print "Checking {0}... ".format(self.fileDescriptionDictionary[extension_pattern])
-            print "================================================================"
-            ext_files_list = self.fileListDictionary[extension_pattern]
-            self.totalCountDictionary[extension_pattern] = len(ext_files_list)
+        compareDictionary = {".*\.so$": FileExtensionComparisonResults(self.compare_shared_object,
+                                               ".so files (shared libraries compared with readelf)",
+                                               get_file_list_by_extension(self.extMountpointPath, ".*\.so$")),
+                             ".*\.ko$": FileExtensionComparisonResults(self.compare_shared_object,
+                                               ".ko files (kernel modules compared with readelf)",
+                                               get_file_list_by_extension(self.extMountpointPath, ".*\.ko$")),
+                             ".*\.jar$": FileExtensionComparisonResults(self.compare_and_process_java,
+                                                ".jar files (Java libraries compared with aapt)",
+                                                get_file_list_by_extension(self.extMountpointPath, ".*\.jar$",)),
+                             ".*\.apk$": FileExtensionComparisonResults(self.compare_and_process_java,
+                                                ".apk (Android Package files compared with aapt)",
+                                                get_file_list_by_extension(self.extMountpointPath, ".*\.apk$")),
+                             "(?!.*\.[so|ko|jar|apk])": FileExtensionComparisonResults(self.compare_files_by_hash,
+                                                               "remaining files compared by hash sum",
+                                                               get_file_list_by_extension(self.extMountpointPath, "(?!.*\.[so|ko|jar|apk])"))}
 
-            for fname in ext_files_list:
+        for extension, result in compareDictionary.items():
+            print "\n================================================================"
+            print "Checking {0}... ".format(result.description)
+            print "================================================================"
+
+            for fname in result.files:
                 with StdoutRedirector() as stdout_redirector:
-                    checkret = self.file_check(fname, self.localMountpointPath, self.extMountpointPath, self.compareMethodDictionary[extension_pattern])
+                    checkret = self.file_check(fname, self.localMountpointPath, self.extMountpointPath, result.compare_method)
                     if checkret is AFSImageComparator.FILE_SAME:
                         pass
                     elif checkret is AFSImageComparator.FILE_DIFF_ALLOWED:
                         pass
                     elif checkret is AFSImageComparator.FILE_DIFF:
                         areImagesSame = False
-                        self.differentCountDictionary[extension_pattern] += 1
-                        print "{1} {0:<4}{2} {3}doesn't match!{4}".format(str(self.differentCountDictionary[extension_pattern]) + ".",
+                        result.diffs.append(fname)
+                        print "{1} {0:<4}{2} {3}doesn't match!{4}".format(str(len(result.diffs)) + ".",
                                                                                timeStamp(), fname, FAIL_COLOR, END_COLOR)
                     elif checkret is AFSImageComparator.FILE_MISS:
                         areImagesSame = False
-                        self.differentCountDictionary[extension_pattern] += 1
+                        result.diffs.append(fname)
                         print "{1} {0:<4}{2} {3}missing in branch {4}!{5}".format(
-                                                                    str(self.differentCountDictionary[extension_pattern]) + ".",
+                                                                    str(len(result.diffs)) + ".",
                                                                     timeStamp(),
                                                                     fname, FAIL_COLOR, EXAMINED_BUILD_BRANCH_NAME, END_COLOR)
-            print "\nFinished checking {1} {0}".format(self.fileDescriptionDictionary[extension_pattern],
-                                                                  self.totalCountDictionary[extension_pattern])
+            print "\nFinished checking {!s} {!s}".format(len(result.files), result.description)
 
         with open(AllowedDifferences.EXCLUSIONS_FILE_PATH) as exclusions_file:
             exclusions_list = exclusions_file.read()
             print '\n****************** Exclusion rules ******************\n', exclusions_list
         print '\n------------------------------------ Summary ------------------------------------'
-        for key in self.totalCountDictionary.keys():
-            if self.totalCountDictionary[key] > 0:
-                group_perc = self.differentCountDictionary[key] / float(self.totalCountDictionary[key]) * 100
+        for key in compareDictionary.keys():
+            if len(compareDictionary[key].diffs) > 0:
+                group_perc = len(compareDictionary[key].diffs) / float(len(compareDictionary[key].files)) * 100
             else:
                 group_perc = 0
-            print '{0:>3} {1:50} differ:{2:>5}% ({0}/{3})'.format(self.differentCountDictionary[key],
-                                                                        self.fileDescriptionDictionary[key],
-                                                                        round(group_perc, 1), self.totalCountDictionary[key])
-        if sum(self.totalCountDictionary.values()) > 0:
-            total_perc = sum(self.differentCountDictionary.values()) / float(sum(self.totalCountDictionary.values())) * 100
+            print '{0:>3} {1:50} differ:{2:>5}% ({0}/{3})'.format(len(compareDictionary[key].diffs),
+                                                                   compareDictionary[key].description,
+                                                                   round(group_perc, 1), len(compareDictionary[key].files))
+
+        total_files = sum([len(results.files) for results in compareDictionary.values()])
+        total_diffs = sum([len(results.diffs) for results in compareDictionary.values()])
+        if total_files > 0:
+            total_perc = total_diffs / float(total_files) * 100
         else:
             total_perc = 0
-        print '\n Total difference:{0:>5}% ({1}/{2})'.format(round(total_perc, 1),
-                                                             sum(self.differentCountDictionary.values()),
-                                                             sum(self.totalCountDictionary.values()))
+        print '\n Total difference:{0:>5}% ({1}/{2})'.format(round(total_perc, 1), total_diffs,total_files)
         print '---------------------------------------------------------------------------------\n'
 
         return areImagesSame

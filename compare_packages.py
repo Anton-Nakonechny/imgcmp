@@ -11,9 +11,42 @@ import datetime
 import signal
 import shutil
 import xml.etree.ElementTree
+import glob
 
 from operator import itemgetter
-from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR, linux_like_find
+from check_files import AFSImageComparator, FAIL_COLOR, WARNING_COLOR, OK_COLOR, END_COLOR
+
+def DFS(root, skip_symlinks = 1):
+    """Depth first search traversal of directory structure."""
+    stack = [root]
+    visited = {}
+    while stack:
+        d = stack.pop()
+        if d not in visited:  ## just to prevent any possible recursive
+                              ## loops
+            visited[d] = 1
+            yield d
+        stack.extend(subdirs(d, skip_symlinks))
+
+def subdirs(root, skip_symlinks = 1):
+    """Given a root directory, returns the first-level subdirectories."""
+    try:
+        dirs = [os.path.join(root, x)
+                for x in os.listdir(root)]
+        dirs = filter(os.path.isdir, dirs)
+        if skip_symlinks:
+            dirs = filter(lambda x: not os.path.islink(x), dirs)
+        return dirs
+    except OSError: return []
+    except IOError: return []
+
+def linux_like_find(root, pattern):
+    files = []
+    for subdir in DFS(root):
+        files += glob.glob(os.path.join (subdir, pattern))
+        files.sort()
+    return files
+
 
 def extractSystemImage(archive, folder):
     try:
