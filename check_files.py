@@ -201,6 +201,7 @@ class FileExtensionComparisonResults(object):
         self.description = descr
         self.files = files_list
         self.diffs = []
+        self.missings = []
 
 class StdoutRedirector(object):
     def __enter__(self):
@@ -610,11 +611,12 @@ class AFSImageComparator(object):
                     elif checkret is AFSImageComparator.FILE_MISS:
                         areImagesSame = False
                         result.diffs.append(fname)
+                        result.missings.append(fname)
                         print "{1} {0:<4}{2} {3}missing in branch {4}!{5}".format(
                                                                     str(len(result.diffs)) + ".",
                                                                     timeStamp(),
                                                                     fname, FAIL_COLOR, EXAMINED_BUILD_BRANCH_NAME, END_COLOR)
-            print "\nFinished checking {!s} {!s}".format(len(result.files), result.description)
+            print "\nFinished checking {0} {1}".format(len(result.files), result.description)
 
         with open(AllowedDifferences.EXCLUSIONS_FILE_PATH) as exclusions_file:
             exclusions_list = exclusions_file.read()
@@ -628,6 +630,8 @@ class AFSImageComparator(object):
             print '{0:>3} {1:50} differ:{2:>5}% ({0}/{3})'.format(len(compareDictionary[key].diffs),
                                                                    compareDictionary[key].description,
                                                                    round(group_perc, 1), len(compareDictionary[key].files))
+            print '   {0} missed files'.format(len(compareDictionary[key].missings))
+            print '   {0} different files'.format(len(compareDictionary[key].diffs)-len(compareDictionary[key].missings))
 
         total_files = sum([len(results.files) for results in compareDictionary.values()])
         total_diffs = sum([len(results.diffs) for results in compareDictionary.values()])
