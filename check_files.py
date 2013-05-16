@@ -263,7 +263,7 @@ class AFSImageComparator(object):
     FILE_MISS = 2
     FILE_DIFF_ALLOWED = 3
 
-    def __init__(self, localImg, extImg, rootDirPath):
+    def __init__(self, extImg, localImg, rootDirPath):
         self.gReadelfProc = None
         self.localMountpointPath = None
         self.extMountpointPath = None
