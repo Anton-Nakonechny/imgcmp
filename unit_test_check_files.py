@@ -143,13 +143,13 @@ class CompareImagesTestSuite(unittest.TestCase):
         are missing and they are not in allowed list
         """
         AllowedDifferences.EXCLUSIONS_FILE_PATH = "unit_test_files/exclusions-list"
-        tester = AFSImageComparator("unit_test_files/img_.missed_not_allowed/missed_not_in_allowed_loc.img",
-                                    "unit_test_files/img_.missed_not_allowed/missed_not_in_allowed_ext.img","")
+        tester = AFSImageComparator("unit_test_files/img_.missed_not_allowed/missed_not_in_allowed_ext.img",
+                                    "unit_test_files/img_.missed_not_allowed/missed_not_in_allowed_loc.img","")
         res = tester.run()
         self.assertFalse(res)
 
-        tester = AFSImageComparator("unit_test_files/img_.same_not_allowed/same_not_in_allowed_loc.img",
-                                    "unit_test_files/img_.same_not_allowed/same_not_in_allowed_ext.img","")
+        tester = AFSImageComparator("unit_test_files/img_.same_not_allowed/same_not_in_allowed_ext.img",
+                                    "unit_test_files/img_.same_not_allowed/same_not_in_allowed_loc.img","")
         res = tester.run()
         self.assertTrue(res)
 
@@ -159,13 +159,13 @@ class CompareImagesTestSuite(unittest.TestCase):
         are missing and they are in allowed list
         """
         AllowedDifferences.EXCLUSIONS_FILE_PATH = "unit_test_files/exclusions-list"
-        tester = AFSImageComparator("unit_test_files/img_.missed_allowed/missed_in_allowed_loc.img",
-                                    "unit_test_files/img_.missed_allowed/missed_in_allowed_ext.img","")
+        tester = AFSImageComparator("unit_test_files/img_.missed_allowed/missed_in_allowed_ext.img",
+                                    "unit_test_files/img_.missed_allowed/missed_in_allowed_loc.img","")
         res = tester.run()
         self.assertTrue(res)
 
-        tester = AFSImageComparator("unit_test_files/img_.same_allowed/same_in_allowed_loc.img",
-                                    "unit_test_files/img_.same_allowed/same_in_allowed_ext.img","")
+        tester = AFSImageComparator("unit_test_files/img_.same_allowed/same_in_allowed_ext.img",
+                                    "unit_test_files/img_.same_allowed/same_in_allowed_loc.img","")
         res = tester.run()
         self.assertTrue(res)
 
